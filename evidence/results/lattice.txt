@@ -1,0 +1,20 @@
+DOES THE MODEL LAND ON THE NORMAL SUBGROUP LATTICE OF S_4?
+
+If it learned G/N, predictions must land in the CORRECT COSET of N almost always.
+Random guessing inside a coset of size |N| gives raw accuracy 1/|N|.
+
+  1 (faithful): |N|= 1  24 cosets  predicted ceiling 1/|N| = 1.000
+           V_4: |N|= 4   6 cosets  predicted ceiling 1/|N| = 0.250
+           A_4: |N|=12   2 cosets  predicted ceiling 1/|N| = 0.083
+           S_4: |N|=24   1 cosets  predicted ceiling 1/|N| = 0.042
+
+  hom  faith  sd  raw acc   1 (faithful)            V_4            A_4            S_4
+-------------------------------------------------------------------------------------
+  1.0    0.0   0    1.000          1.000          1.000          1.000          1.000
+  1.0    0.0   2    1.000          1.000          1.000          1.000          1.000
+  1.0    1.0   1    0.230          0.230          0.999          0.999          1.000
+  1.0    0.0   3    0.081          0.081          0.329          1.000          1.000
+  1.0    0.0   1    0.042          0.042          0.165          0.472          1.000
+
+  Read: the learned kernel is the SMALLEST N whose coset score is ~1.000.
+  If raw acc ~ 1/|N| for that same N, the lattice reading is confirmed.

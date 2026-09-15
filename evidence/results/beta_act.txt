@@ -1,0 +1,34 @@
+DOES THE BETA ACTIVATION GATE THE NON-ABELIAN REGIME?
+
+  I - beta u u^T :  beta<1 contraction | beta=1 projection | beta=2 reflection
+  reflections generate non-abelian structure; fla's allow_neg_eigval IS the 2x.
+  rungs 1.000 / 0.250 / 0.083 / 0.042
+
+   beta  sd    L=12    L=96    rung  mean b  max3dim
+--------------------------------------------------------
+   sig2   0   0.042   0.035   0.042   1.006    0.056   (75s)
+   sig2   1   0.052   0.031   0.042   1.005    0.038   (74s)
+   sig2   2   0.034   0.031   0.042   1.001    0.070   (100s)
+   sig2   3   0.042   0.039   0.042   1.000    0.133   (98s)
+   sig2  == 0/4 solved at L=96
+
+   sig1   0   0.036   0.041   0.042   0.581    0.001   (84s)
+   sig1   1   0.060   0.046   0.042   0.332    0.029   (71s)
+   sig1   2   0.044   0.046   0.042   0.598    0.006   (72s)
+   sig1   3   0.045   0.042   0.042   0.457    0.023   (79s)
+   sig1  == 0/4 solved at L=96
+
+ fixed2   0   0.054   0.041   0.042   2.000    0.272   (65s)
+ fixed2   1   0.039   0.042   0.042   2.000    0.001   (74s)
+ fixed2   2   0.040   0.040   0.042   2.000    0.001   (78s)
+ fixed2   3   0.101   0.081   0.083   2.000    0.220   (66s)
+ fixed2  == 0/4 solved at L=96
+
+   free   0   0.041   0.030   0.042   1.006    0.056   (71s)
+   free   1   0.053   0.038   0.042   1.005    0.048   (72s)
+   free   2   0.044   0.023   0.042   1.003    0.055   (83s)
+   free   3   0.039   0.042   0.042   0.726    0.060   (78s)
+   free  == 0/4 solved at L=96
+
+  If sig1 (no reflections) cannot reach 1.000 while sig2 can, the ACTIVATION
+  RANGE -- not the objective -- is what gates the reachable lattice position.

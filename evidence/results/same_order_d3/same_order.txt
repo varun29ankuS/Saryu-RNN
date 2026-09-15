@@ -1,0 +1,42 @@
+SAME ORDER, DIFFERENT LATTICE  [n_h=8, d=3, 2400 steps, train L=12]
+
+       S_4  rungs 0.042, 0.083, 0.250, 1.000   exclusive 0.083, 0.250
+   SL(2,3)  rungs 0.042, 0.125, 0.500, 1.000   exclusive 0.125, 0.500
+
+   group  sd   L=12   L=96  L=384  grp-law kernel  verdict
+------------------------------------------------------------------------------
+     S_4   0  1.000  0.999  0.838   0.0288      1  solved at 96, drifts
+     S_4   1  0.267  0.236  0.249   0.0227      4  on own rung 1/4 = 0.250
+     S_4   2  0.042  0.030  0.038   0.1080     24  on own rung 1/24 = 0.042
+     S_4   3  1.000  0.995  0.752   0.0284      1  solved at 96, drifts
+     S_4   4  0.251  0.261  0.265   0.0168      4  on own rung 1/4 = 0.250
+     S_4   5  1.000  0.998  0.859   0.0261      1  solved at 96, drifts
+     S_4   6  1.000  0.986  0.685   0.0296      1  solved at 96, drifts
+     S_4   7  0.250  0.247  0.243   0.0180      4  on own rung 1/4 = 0.250
+     S_4   8  1.000  0.996  0.781   0.0302      1  solved at 96, drifts
+     S_4   9  0.258  0.234  0.269   0.0220      4  on own rung 1/4 = 0.250
+     S_4  10  1.000  0.997  0.809   0.0271      1  solved at 96, drifts
+     S_4  11  0.248  0.240  0.237   0.0241      4  on own rung 1/4 = 0.250
+     S_4  12  1.000  0.985  0.671   0.0305      1  solved at 96, drifts
+     S_4  13  1.000  0.998  0.825   0.0248      1  solved at 96, drifts
+     S_4  14  0.247  0.236  0.247   0.0253      4  on own rung 1/4 = 0.250
+     S_4  15  0.252  0.249  0.261   0.0203      4  on own rung 1/4 = 0.250
+ SL(2,3)   0  0.057  0.038  0.043   0.2779     24  on own rung 1/24 = 0.042
+ SL(2,3)   1  0.025  0.034  0.039   0.0851     24  on own rung 1/24 = 0.042
+ SL(2,3)   2  0.510  0.379  0.109   0.0630     24  not flat (not scored)
+ SL(2,3)   3  0.486  0.511  0.423   0.0307      2  not flat (not scored)
+ SL(2,3)   4  0.510  0.496  0.468   0.0262      2  on own rung 1/2 = 0.500
+ SL(2,3)   5  0.120  0.119  0.128   0.0171      8  on own rung 1/8 = 0.125
+ SL(2,3)   6  0.038  0.049  0.041   0.2888     24  on own rung 1/24 = 0.042
+ SL(2,3)   7  0.517  0.504  0.470   0.0265      2  on own rung 1/2 = 0.500
+ SL(2,3)   8  0.493  0.506  0.479   0.0250      2  on own rung 1/2 = 0.500
+ SL(2,3)   9  0.506  0.469  0.474   0.0237      2  VIOLATES 1: acc 0.469 off 1/|N| = 0.500
+ SL(2,3)  10  0.480  0.508  0.415   0.0279      2  not flat (not scored)
+ SL(2,3)  11  0.118  0.140  0.126   0.0284      8  on own rung 1/8 = 0.125
+ SL(2,3)  12  0.514  0.497  0.456   0.0276      2  on own rung 1/2 = 0.500
+ SL(2,3)  13  0.046  0.041  0.042   0.2389     24  on own rung 1/24 = 0.042
+ SL(2,3)  14  0.042  0.039  0.047   0.1876     24  on own rung 1/24 = 0.042
+ SL(2,3)  15  0.506  0.489  0.396   0.0292      2  not flat (not scored)
+
+  runs 32   flat failures scored 20   on an exclusive rung 13   violations 1
+  VERDICT: FALSIFIED

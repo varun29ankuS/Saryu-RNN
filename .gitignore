@@ -1,0 +1,19 @@
+# data, checkpoints (GitHub Release) and corpora stay out of git
+__pycache__/
+*.pyc
+data/
+corpus/
+checkpoints/
+runs/
+*.pt
+*.npz
+*.npy
+*.zip
+*.log
+**/out_*/
+.claude/
+.pytest_cache/
+paper/*.aux
+paper/*.bbl
+paper/*.blg
+paper/*.out

@@ -1,0 +1,10 @@
+WHAT NOBODY TRIES: mixed-length training and a weak readout
+S_4, |G|=24. Mixed trains on lengths 4-12; fixed trains only on 12.
+Evaluated at [12, 24, 48, 96]; chance 0.042. Reference: exact solution = 1.000 everywhere.
+
+  length   readout  solved    L=12    L=24    L=48    L=96  grp-law
+------------------------------------------------------------------
+   fixed       MLP    0/4   0.379   0.250   0.117   0.059   0.7858
+   fixed    linear    0/4   0.811   0.799   0.719   0.556   0.6407
+   mixed       MLP    0/4   0.402   0.340   0.196   0.070   0.6505
+   mixed    linear    0/4   0.627   0.601   0.506   0.383   0.7017

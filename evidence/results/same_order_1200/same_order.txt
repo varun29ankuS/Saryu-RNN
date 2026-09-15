@@ -1,0 +1,42 @@
+SAME ORDER, DIFFERENT LATTICE  [n_h=8, d=6, 1200 steps, train L=12]
+
+       S_4  rungs 0.042, 0.083, 0.250, 1.000   exclusive 0.083, 0.250
+   SL(2,3)  rungs 0.042, 0.125, 0.500, 1.000   exclusive 0.125, 0.500
+
+   group  sd   L=12   L=96  L=384  grp-law kernel  verdict
+------------------------------------------------------------------------------
+     S_4   0  1.000  0.915  0.468   0.2185     24  solved at 96, drifts
+     S_4   1  1.000  0.836  0.383   0.2968     24  not flat (not scored)
+     S_4   2  1.000  0.914  0.531   0.1671     24  solved at 96, drifts
+     S_4   3  0.226  0.237  0.198   0.2765      4  on own rung 1/4 = 0.250
+     S_4   4  1.000  0.997  0.785   0.1194      1  solved at 96, drifts
+     S_4   5  1.000  1.000  0.528   0.1096      1  solved at 96, drifts
+     S_4   6  1.000  1.000  1.000   0.0238      1  solved
+     S_4   7  1.000  0.899  0.465   0.2582     24  not flat (not scored)
+     S_4   8  1.000  0.954  0.587   0.2048      1  solved at 96, drifts
+     S_4   9  1.000  0.907  0.525   0.1902     24  solved at 96, drifts
+     S_4  10  1.000  1.000  0.926   0.0307      1  solved at 96, drifts
+     S_4  11  1.000  0.890  0.456   0.2295     24  not flat (not scored)
+     S_4  12  1.000  0.877  0.452   0.2189     24  not flat (not scored)
+     S_4  13  1.000  0.912  0.412   0.1915     24  solved at 96, drifts
+     S_4  14  0.255  0.232  0.083   0.2760     12  not flat (not scored)
+     S_4  15  1.000  1.000  1.000   0.0215      1  solved
+ SL(2,3)   0  0.514  0.495  0.407   0.1866      2  not flat (not scored)
+ SL(2,3)   1  1.000  0.762  0.000   0.1580     24  not flat (not scored)
+ SL(2,3)   2  1.000  0.993  0.410   0.1265      1  solved at 96, drifts
+ SL(2,3)   3  1.000  0.739  0.001   0.1926     24  not flat (not scored)
+ SL(2,3)   4  0.521  0.489  0.398   0.1102      2  not flat (not scored)
+ SL(2,3)   5  1.000  0.977  0.507   0.1805      1  solved at 96, drifts
+ SL(2,3)   6  0.487  0.519  0.394   0.1168      2  not flat (not scored)
+ SL(2,3)   7  0.500  0.521  0.389   0.1413      2  not flat (not scored)
+ SL(2,3)   8  1.000  0.856  0.009   0.1077     24  not flat (not scored)
+ SL(2,3)   9  0.505  0.500  0.371   0.1866      2  not flat (not scored)
+ SL(2,3)  10  0.501  0.470  0.346   0.2184      2  not flat (not scored)
+ SL(2,3)  11  1.000  0.943  0.000   0.0394     24  solved at 96, drifts
+ SL(2,3)  12  0.495  0.486  0.412   0.1514      2  not flat (not scored)
+ SL(2,3)  13  1.000  0.468  0.000   0.1381     24  not flat (not scored)
+ SL(2,3)  14  0.476  0.479  0.403   0.0939      2  not flat (not scored)
+ SL(2,3)  15  0.231  0.126  0.028   0.3128      8  not flat (not scored)
+
+  runs 32   flat failures scored 1   on an exclusive rung 1   violations 0
+  VERDICT: prediction holds
