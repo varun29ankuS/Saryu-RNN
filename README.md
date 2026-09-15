@@ -21,7 +21,8 @@ Lower is better.
 | model | params | train steps | ctx 128 | ctx 512 | ctx 2048 | ctx 8192 |
 |---|---|---|---|---|---|---|
 | **Saryu v3, 25M** | 25.2M | 10,000 | **1.643** | **1.516** | **1.562** | **1.467** |
-| Saryu v3, 5M | 5.1M | 5,000 | 1.787 | 1.671 | 1.708 | 1.607 |
+| Saryu v3, 5M (released checkpoint, value embedding) | 5.0M | 5,000 | 1.782 | 1.671 | 1.706 | 1.606 |
+| Saryu v3, 5M (base recipe, seed 0) | 5.1M | 5,000 | 1.787 | 1.671 | 1.708 | 1.607 |
 | GRU, same block anatomy, 5M | 4.9M | 5,000 | 1.811 | 1.679 | 1.726 | 1.633 |
 | Transformer, 5M | 5.0M | 12,000 | 1.740 | 5.569 | 5.531 | 5.509 |
 
@@ -50,9 +51,13 @@ corpus/                 enwik8                            (not in git)
 
 ## Running
 
-Requires Python 3.10+ and PyTorch. Download the weights and, for training, the corpus:
+Requires Python 3.10+. Install the dependencies, download the weights and, for training only, the
+corpus:
 
+    pip install -r requirements.txt
     gh release download v0.1 --repo varun29ankuS/saryu -D checkpoints
+    # or without the GitHub CLI:
+    mkdir -p checkpoints && for f in saryu_25m.pt saryu_v4b_last.pt; do curl -L -o checkpoints/$f https://github.com/varun29ankuS/saryu/releases/download/v0.1/$f; done
     mkdir -p corpus && curl -L http://mattmahoney.net/dc/enwik8.zip -o corpus/enwik8.zip && unzip corpus/enwik8.zip -d corpus
 
 Then:
