@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Saryu — a recurrent language model carried by reflections</title>
+<meta name="description" content="Saryu is a recurrent language model whose state is moved by input-dependent Householder reflections: order-sensitive, provably bounded, constant memory per token, trained with an exact chunk-parallel kernel.">
+<meta property="og:title" content="Saryu">
+<meta property="og:description" content="A recurrent language model whose state is moved by Householder reflections.">
+<meta property="og:url" content="https://varun29ankuS.github.io/saryu/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230c4a5a'/%3E%3Cpath d='M12 40c8-14 16-14 20 0s12 14 20 0' stroke='%23f2b35b' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f7f5f0; --bg2:#efece4; --card:#ffffff; --ink:#15212a; --muted:#5b6770; --line:#dcd7cb;
+  --river:#0c4a5a; --river2:#1b7286; --sun:#d98a1e; --sunsoft:#f2b35b; --blue:#2e75b6; --red:#c0392b;
+  --code:#10222b; --codeink:#e6eef1;
+  --serif:"Fraunces", Georgia, "Times New Roman", serif;
+  --sans:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#0d1418; --bg2:#121c21; --card:#16232a; --ink:#e7eef0; --muted:#9aa9b0; --line:#26363e;
+    --river:#5fb6c8; --river2:#86cfdd; --sun:#f2b35b; --sunsoft:#f2b35b; --blue:#6fa8dc; --red:#ef7b6d;
+    --code:#0a1115; --codeink:#dce7ea; }
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--river2)} a:hover{color:var(--sun)}
+.wrap{max-width:1080px;margin:0 auto;padding-inline:20px}
+nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:22px;height:58px;overflow-x:auto;white-space:nowrap}
+nav .brand{font:650 20px var(--serif);color:var(--ink);text-decoration:none;margin-right:auto}
+nav a.l{color:var(--muted);text-decoration:none;font-size:14px} nav a.l:hover{color:var(--ink)}
+header.hero{padding-block:72px 40px;position:relative;overflow:hidden}
+.hero h1{font:650 clamp(52px,9vw,96px)/1 var(--serif);margin:0 0 14px;letter-spacing:-.02em}
+.hero p.lead{font-size:clamp(19px,2.4vw,24px);max-width:720px;margin:0 0 28px;color:var(--ink)}
+.hero p.lead em{font-style:normal;color:var(--river2);font-weight:600}
+.btns{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:40px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;border:1px solid var(--line);color:var(--ink);background:var(--card)}
+.btn.primary{background:var(--river);border-color:var(--river);color:#fff}
+@media (prefers-color-scheme: dark){.btn.primary{color:#07161b}}
+.btn:hover{transform:translateY(-1px);color:inherit}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.stat b{display:block;font:650 30px/1.1 var(--serif);color:var(--river)}
+.stat span{color:var(--muted);font-size:14px}
+.wave{position:absolute;right:-60px;top:30px;width:520px;opacity:.14;pointer-events:none}
+section{padding-block:56px;border-top:1px solid var(--line)}
+section h2{font:650 clamp(30px,4vw,40px)/1.15 var(--serif);margin:0 0 10px;letter-spacing:-.01em}
+section .kicker{font:500 13px var(--mono);color:var(--sun);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
+section p.sub{color:var(--muted);max-width:760px;margin:0 0 28px}
+.eq{font:15px/1.7 var(--mono);background:var(--code);color:var(--codeink);border-radius:12px;padding:16px 20px;overflow-x:auto;white-space:pre}
+.grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:28px;align-items:start}
+@media (max-width:860px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+/* demo */
+#demo svg{width:100%;height:auto;display:block;touch-action:none}
+.controls{display:grid;gap:14px;margin-top:14px}
+.controls label{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
+.controls output{font:500 14px var(--mono);color:var(--ink)}
+input[type=range]{width:100%;accent-color:var(--river2)}
+.readout{font:14px/1.7 var(--mono);color:var(--muted);margin-top:10px}
+.readout b{color:var(--ink);font-weight:500}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);margin-top:8px}
+.sw{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+/* pipeline */
+.pipe{display:flex;flex-direction:column;align-items:center;gap:0}
+.stage{width:min(100%,560px);text-align:center;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:15px}
+.stage small{display:block;color:var(--muted);font-size:12.5px}
+.stage.norm{background:var(--bg2)} .stage.rec{background:color-mix(in srgb,var(--sunsoft) 30%,var(--card));border-color:color-mix(in srgb,var(--sun) 50%,var(--line));font-weight:600}
+.arrow{width:2px;height:18px;background:var(--line);position:relative}
+.arrow:after{content:"";position:absolute;left:-4px;bottom:-2px;border:5px solid transparent;border-top-color:var(--line)}
+.proj{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(100%,720px)}
+@media (max-width:620px){.proj{grid-template-columns:repeat(2,1fr)}}
+.proj .stage{width:auto;background:color-mix(in srgb,var(--river2) 12%,var(--card));font:13px/1.4 var(--mono)}
+/* why */
+.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.why .card h3{font:600 18px/1.3 var(--sans);margin:0 0 8px}
+.why .card h3 span{color:var(--sun);font:500 13px var(--mono);display:block;margin-bottom:4px}
+.why .card p{margin:0 0 10px;color:var(--ink);font-size:15px}
+.why .card a.ev{font:500 13px var(--mono);text-decoration:none}
+/* results */
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:15px}
+th,td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+thead th{font:500 13px var(--mono);color:var(--muted);background:var(--bg2)}
+tr.hl td{font-weight:600;color:var(--river)}
+tr:last-child td{border-bottom:0}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
+@media (max-width:860px){.charts{grid-template-columns:1fr}}
+.chart svg{width:100%;height:auto;display:block}
+.chart h3{font:600 15px var(--sans);margin:0 0 6px}
+.chart p{font-size:13.5px;color:var(--muted);margin:6px 0 0}
+ul.honest{padding-left:20px;margin:20px 0 0} ul.honest li{margin-bottom:6px}
+/* code */
+pre.code{position:relative;font:14px/1.6 var(--mono);background:var(--code);color:var(--codeink);border-radius:12px;padding:16px 18px;overflow-x:auto;margin:0 0 14px}
+button.copy{position:absolute;top:8px;right:8px;font:500 12px var(--sans);background:transparent;color:var(--codeink);border:1px solid #3a525c;border-radius:7px;padding:4px 9px;cursor:pointer;opacity:.8}
+button.copy:hover{opacity:1}
+.cmt{color:#8fb3bd}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.status .card b{display:block;font:500 13px var(--mono);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
+.ok b{color:#2f9e6a} .next b{color:var(--sun)} .plan b{color:var(--muted)}
+footer{border-top:1px solid var(--line);padding-block:36px;color:var(--muted);font-size:14px}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between}
+</style>
+</head>
+<body>
+
+<nav><div class="wrap">
+  <a class="brand" href="#">Saryu</a>
+  <a class="l" href="#idea">Idea</a>
+  <a class="l" href="#architecture">Architecture</a>
+  <a class="l" href="#why">Why this way</a>
+  <a class="l" href="#results">Results</a>
+  <a class="l" href="#start">Quickstart</a>
+  <a class="l" href="https://github.com/varun29ankuS/saryu/blob/main/paper/main.pdf">Paper</a>
+  <a class="l" href="https://github.com/varun29ankuS/saryu">GitHub</a>
+</div></nav>
+
+<header class="hero"><div class="wrap">
+  <svg class="wave" viewBox="0 0 520 260" aria-hidden="true"><path d="M0 170 C 90 40, 170 40, 260 150 S 430 260, 520 110" stroke="var(--river2)" stroke-width="22" fill="none" stroke-linecap="round"/><path d="M0 220 C 90 90, 170 90, 260 200 S 430 310, 520 160" stroke="var(--sun)" stroke-width="10" fill="none" stroke-linecap="round"/></svg>
+  <h1>Saryu</h1>
+  <p class="lead">A recurrent language model whose state is moved by <em>Householder reflections</em> — so it remembers the order of what it read, stays provably bounded, and costs the same per token at any context length.</p>
+  <div class="btns">
+    <a class="btn primary" href="https://github.com/varun29ankuS/saryu">View on GitHub</a>
+    <a class="btn" href="https://github.com/varun29ankuS/saryu/blob/main/paper/main.pdf">Read the paper (draft v1)</a>
+    <a class="btn" href="https://github.com/varun29ankuS/saryu/releases/tag/v0.1">Download weights</a>
+  </div>
+  <div class="stats">
+    <div class="stat"><b>11,904</b><span>numbers of state for the whole 25M model, at any context length</span></div>
+    <div class="stat"><b>1.467 bpc</b><span>at 8,192 characters of context — trained only at 128</span></div>
+    <div class="stat"><b>4.8 × 10⁻⁷</b><span>largest gap between the parallel kernel and the step-by-step recurrence</span></div>
+  </div>
+</div></header>
+
+<section id="idea"><div class="wrap">
+  <div class="kicker">The idea</div>
+  <h2>Order lives in the state</h2>
+  <p class="sub">Every layer keeps a small vector per head. Each token applies two input-dependent Householder transforms to it, then a gate mixes in new content. A reflection preserves the state's length, and two reflections about different mirrors do not commute — so reading <i>a then b</i> leaves a different state than <i>b then a</i>. Try it.</p>
+  <div class="grid2">
+    <div class="card" id="demo">
+      <svg id="demoSvg" viewBox="0 0 440 440" role="img" aria-label="Two reflections applied in both orders"></svg>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--ink)"></i>state v (drag it)</span>
+        <span><i class="sw" style="background:var(--blue)"></i>H₂H₁v</span>
+        <span><i class="sw" style="background:var(--red)"></i>H₁H₂v</span>
+        <span><i class="sw" style="background:var(--muted)"></i>mirrors</span>
+      </div>
+    </div>
+    <div>
+      <div class="eq">h_t = (1 − g_t) · H₂ H₁ h_{t−1} + g_t · c_t
+
+H_i = I − β_i u_i u_iᵀ
+β_i = 1 − cos θ_i  ∈ [0, 2]
+g_t = ½ (1 − cos φ_t) ≤ 0.9</div>
+      <div class="controls card" style="margin-top:14px">
+        <div><label>angle between the two mirrors <output id="oAng">45°</output></label><input id="ang" type="range" min="0" max="180" value="45"></div>
+        <div><label>strength β for both transforms <output id="oBeta">2.00</output></label><input id="beta" type="range" min="0" max="200" value="200"></div>
+        <div class="readout" id="readout"></div>
+      </div>
+      <p class="sub" style="margin-top:14px;font-size:14.5px">β = 0 leaves the state alone, β = 1 projects out one direction, β = 2 reflects it. At β = 2 the two orders differ by a rotation of four times the mirror angle, and no length is lost.</p>
+    </div>
+  </div>
+</div></section>
+
+<section id="architecture"><div class="wrap">
+  <div class="kicker">Architecture</div>
+  <h2>One Saryu block</h2>
+  <p class="sub">Each of the model's layers is this block followed by a SwiGLU feed-forward block, both residual. The recurrence is the only part that looks back more than four tokens.</p>
+  <div class="pipe">
+    <div class="stage">input x<sub>t</sub> from the residual stream</div><div class="arrow"></div>
+    <div class="stage norm">LayerNorm</div><div class="arrow"></div>
+    <div class="stage norm">causal depthwise convolution, width 4<small>a short local window for every projection</small></div><div class="arrow"></div>
+    <div class="proj">
+      <div class="stage">u = normalize(W<sub>u</sub>z)<br><small>2 unit vectors / head</small></div>
+      <div class="stage">β = 1 − cos(W<sub>θ</sub>z)<br><small>transform strength</small></div>
+      <div class="stage">g = ½(1 − cos W<sub>φ</sub>z)<br><small>one gate / head</small></div>
+      <div class="stage">c = W<sub>c</sub>z<br><small>new content</small></div>
+    </div><div class="arrow"></div>
+    <div class="stage rec">per-head recurrence &nbsp; h<sub>t</sub> = (1−g<sub>t</sub>) H₂H₁ h<sub>t−1</sub> + g<sub>t</sub>c<sub>t</sub><small>8 heads · state of d/8 numbers each · trained with the exact chunk-parallel kernel</small></div><div class="arrow"></div>
+    <div class="stage norm">RMSNorm per head</div><div class="arrow"></div>
+    <div class="stage norm">× SiLU(W<sub>o</sub>z) output gate &nbsp;→&nbsp; W<sub>out</sub> &nbsp;→ back to the residual stream</div>
+  </div>
+</div></section>
+
+<section id="why"><div class="wrap">
+  <div class="kicker">Design</div>
+  <h2>Why it is built this way</h2>
+  <p class="sub">Every choice exists for a stated reason, and most were settled by a small experiment before the language model was trained. The paper has the full arguments; each card links to its evidence.</p>
+  <div class="why">
+    <div class="card"><h3><span>01</span>Recurrent, not attention</h3><p>A transformer re-reads a cache that grows with the context. A recurrent state does not grow, so generation cost and memory per token are constant. The real question is what a fixed state can represent — the rest of this list is the answer.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/paper/main.pdf">paper §2.4 →</a></div>
+    <div class="card"><h3><span>02</span>Reflections, not a diagonal recurrence</h3><p>Diagonal transitions commute, so a pure diagonal transport can only compute functions of the multiset of tokens. On the S₃ word problem that caps accuracy at a provable 0.385: commuting transports sit on it (0.388, 0.389); a non-commuting one goes above it (0.779).</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/evidence/results/v2.txt">evidence/ceiling.py →</a></div>
+    <div class="card"><h3><span>03</span>β = 1 − cos θ</h3><p>Bounded in [0, 2] for every input, reaches the exact reflection that a sigmoid only approaches, and has zero slope there, so a reflection is a stable place to sit. In a toy sweep the sigmoid solved 0 of 16 state-tracking runs; this form solved 9 of 16.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/evidence/beta_activation.py">evidence/beta_activation.py →</a></div>
+    <div class="card"><h3><span>04</span>β learnable, not fixed at 2</h3><p>A fixed reflection can never forget along a direction and forces the same determinant sign on every token. The trained 25M model uses the whole range: near-exact reflections in its first layer, soft contractions in its last.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/evidence/parity.py">evidence/parity.py →</a></div>
+    <div class="card"><h3><span>05</span>A convex, scalar gate</h3><p>Every transform has spectral norm ≤ 1 and the write is a convex mix, so the state is bounded by its inputs for every sequence. One scalar per head commutes with the reflections — that is what makes the exact kernel possible; a per-dimension gate breaks it.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/evidence/chunkwise.py">evidence/chunkwise.py →</a></div>
+    <div class="card"><h3><span>06</span>An exact kernel, not an approximation</h3><p>Training processes chunks of 8 tokens with one unit lower-triangular solve each and no matrix inverse, with log-space rescaling that stays below e<sup>8.1</sup>. It equals the recurrence to float precision, and the tests check it on every push.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/tests/test_model.py">tests/test_model.py →</a></div>
+    <div class="card"><h3><span>07</span>A small state, facts elsewhere</h3><p>A vector per head is cheap and suits tracking <i>where</i> a sequence is. It cannot hold many independent facts, so that job is planned for a matrix memory addressed by the tracked state — designed, not yet training.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/tree/main/experimental/memory">experimental/memory →</a></div>
+    <div class="card"><h3><span>08</span>The block matters, so hold it fixed</h3><p>A GRU placed inside the same block comes close to Saryu at 5M. The surrounding anatomy does a lot of work, so comparisons keep the block fixed and swap only the transport.</p><a class="ev" href="#results">results table →</a></div>
+    <div class="card"><h3><span>09</span>Small and falsifiable first</h3><p>Everything so far runs on one T4 GPU or a laptop CPU, so each design question is settled in hours. Predictions are committed before a run and reported either way — including a control recorded as falsified.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/evidence/same_order.py">evidence/same_order.py →</a></div>
+  </div>
+</div></section>
+
+<section id="results"><div class="wrap">
+  <div class="kicker">Results so far</div>
+  <h2>Character-level enwik8</h2>
+  <p class="sub">Bits per character on the last 128 characters of 64 random evaluation windows at each context length. Every model was trained at context 128. Lower is better.</p>
+  <div class="tablewrap"><table>
+    <thead><tr><th>model</th><th>params</th><th>steps</th><th>ctx 128</th><th>ctx 512</th><th>ctx 2048</th><th>ctx 8192</th></tr></thead>
+    <tbody>
+      <tr class="hl"><td>Saryu 25M</td><td>25.2M</td><td>10,000</td><td>1.643</td><td>1.516</td><td>1.562</td><td>1.467</td></tr>
+      <tr><td>Saryu 5M (released checkpoint)</td><td>5.0M</td><td>5,000</td><td>1.782</td><td>1.671</td><td>1.706</td><td>1.606</td></tr>
+      <tr><td>Saryu 5M (base recipe, seed 0)</td><td>5.1M</td><td>5,000</td><td>1.787</td><td>1.671</td><td>1.708</td><td>1.607</td></tr>
+      <tr><td>GRU, same block, 5M</td><td>4.9M</td><td>5,000</td><td>1.811</td><td>1.679</td><td>1.726</td><td>1.633</td></tr>
+      <tr><td>Transformer, 5M</td><td>5.0M</td><td>12,000</td><td>1.740</td><td>5.569</td><td>5.531</td><td>5.509</td></tr>
+    </tbody>
+  </table></div>
+  <div class="charts">
+    <div class="card chart"><h3>Longer context helps, though it was never trained on</h3><svg id="chartCtx" viewBox="0 0 460 280"></svg><p>Trained at 128, scored with up to 8,192 characters read.</p></div>
+    <div class="card chart"><h3>What the 25M model's transports learned</h3><svg id="chartLayers" viewBox="0 0 460 280"></svg><p>Low layers: near-exact reflections, frequent rewrites. Top layer: soft contractions, long memory.</p></div>
+  </div>
+  <ul class="honest">
+    <li>At 5M a GRU in the identical block is close behind. The transport is not yet a clear win over a strong recurrent baseline; matched comparisons at larger scale come next.</li>
+    <li>The transformer is better at its training length and cannot extrapolate past it.</li>
+    <li>Small models, one corpus, our own 95/5 character split — not comparable with published enwik8 numbers, and no evidence yet about LLM scale.</li>
+  </ul>
+</div></section>
+
+<section id="start"><div class="wrap">
+  <div class="kicker">Quickstart</div>
+  <h2>Run it in a minute</h2>
+  <p class="sub">Python 3.10+. The demos need only the weights; training also needs the corpus.</p>
+  <pre class="code"><button class="copy">copy</button>git clone https://github.com/varun29ankuS/saryu && cd saryu
+pip install -r requirements.txt
+gh release download v0.1 --repo varun29ankuS/saryu -D checkpoints</pre>
+  <pre class="code"><button class="copy">copy</button>python -m pytest tests                                  <span class="cmt"># kernel exactness, norm, order, checkpoints</span>
+python scripts/talk.py "The history of India begins with "
+python scripts/serve.py                                 <span class="cmt"># web UI that shows the state while it writes</span></pre>
+</div></section>
+
+<section id="status"><div class="wrap">
+  <div class="kicker">Status</div>
+  <h2>Where Saryu is</h2>
+  <div class="status" style="margin-top:22px">
+    <div class="card ok"><b>Works</b>The reflection recurrence at 5M and 25M parameters, the exact kernel, released weights, tests and demos.</div>
+    <div class="card next"><b>Next</b>Matched comparisons at larger scale with several seeds and a second corpus; a fused GPU kernel.</div>
+    <div class="card plan"><b>Planned</b>A matrix memory for facts, addressed by the tracked state — once the tracker learns to change state only when it should.</div>
+  </div>
+</div></section>
+
+<section id="cite"><div class="wrap">
+  <div class="kicker">Cite</div>
+  <h2>Citation</h2>
+  <pre class="code"><button class="copy">copy</button>@misc{sharma2026saryu,
+  author = {Varun Sharma},
+  title  = {Saryu: a recurrent language model whose state is carried by Householder reflections},
+  year   = {2026},
+  note   = {Technical report, draft v1},
+  url    = {https://github.com/varun29ankuS/saryu}
+}</pre>
+</div></section>
+
+<footer><div class="wrap">
+  <span>Saryu · Varun Sharma · code and weights under Apache-2.0</span>
+  <span><a href="https://github.com/varun29ankuS/saryu">GitHub</a> · <a href="https://github.com/varun29ankuS/saryu/blob/main/paper/main.pdf">Paper</a> · <a href="https://github.com/varun29ankuS/saryu/releases/tag/v0.1">Weights</a></span>
+</div></footer>
+
+<script>
+(function(){
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  const NS = 'http://www.w3.org/2000/svg';
+  const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+
+  /* ---------------- reflection demo ---------------- */
+  const svg = document.getElementById('demoSvg');
+  const S = 440, C = S/2, K = 88;               // scale: 1 unit = 88px
+  let v = [1.5, 0.55];
+  const ang = document.getElementById('ang'), beta = document.getElementById('beta');
+  const toS = p => [C + p[0]*K, C - p[1]*K];
+  const H = (u, b, x) => { const d = u[0]*x[0] + u[1]*x[1]; return [x[0] - b*d*u[0], x[1] - b*d*u[1]]; };
+  const norm = x => Math.hypot(x[0], x[1]);
+  function arrow(p, q, color, width, dash){
+    const a = toS(p), b = toS(q);
+    const l = el('line', {x1:a[0], y1:a[1], x2:b[0], y2:b[1], stroke:color, 'stroke-width':width, 'stroke-linecap':'round'}, svg);
+    if (dash) l.setAttribute('stroke-dasharray', dash);
+    const ang = Math.atan2(b[1]-a[1], b[0]-a[0]), s = 9 + width;
+    if (Math.hypot(b[0]-a[0], b[1]-a[1]) > 12)
+      el('path', {d:`M${b[0]},${b[1]} L${b[0]-s*Math.cos(ang-0.4)},${b[1]-s*Math.sin(ang-0.4)} L${b[0]-s*Math.cos(ang+0.4)},${b[1]-s*Math.sin(ang+0.4)} Z`, fill:color}, svg);
+  }
+  function label(p, text, color){ const s = toS(p); const t = el('text', {x:s[0]+8, y:s[1]-8, fill:color, 'font-size':15, 'font-family':'Inter, sans-serif', 'font-weight':600}, svg); t.textContent = text; }
+  function draw(){
+    svg.innerHTML = '';
+    const ink = css('--ink'), muted = css('--muted'), line = css('--line'), blue = css('--blue'), red = css('--red');
+    for (let i = -2; i <= 2; i++){
+      el('line', {x1:C+i*K, y1:0, x2:C+i*K, y2:S, stroke:line, 'stroke-width':i===0?1.4:0.7}, svg);
+      el('line', {x1:0, y1:C+i*K, x2:S, y2:C+i*K, stroke:line, 'stroke-width':i===0?1.4:0.7}, svg);
+    }
+    const a2 = ang.value * Math.PI / 180, b = beta.value / 100;
+    const u1 = [0, 1], u2 = [-Math.sin(a2), Math.cos(a2)];          // mirror 1 along x, mirror 2 at angle a2
+    [[1,0],[Math.cos(a2), Math.sin(a2)]].forEach(m => {
+      const p = toS([-2.4*m[0], -2.4*m[1]]), q = toS([2.4*m[0], 2.4*m[1]]);
+      el('line', {x1:p[0], y1:p[1], x2:q[0], y2:q[1], stroke:muted, 'stroke-width':1.3, 'stroke-dasharray':'6 6'}, svg);
+    });
+    const h1 = H(u1, b, v), h21 = H(u2, b, h1), h2 = H(u2, b, v), h12 = H(u1, b, h2);
+    arrow(v, h1, blue, 1.6, '3 5'); arrow(h1, h21, blue, 1.6, '3 5');
+    arrow(v, h2, red, 1.6, '3 5');  arrow(h2, h12, red, 1.6, '3 5');
+    arrow([0,0], h21, blue, 3.4); arrow([0,0], h12, red, 3.4); arrow([0,0], v, ink, 3.4);
+    label(h21, 'H₂H₁v', blue); label(h12, 'H₁H₂v', red); label(v, 'v', ink);
+    const handle = toS(v); el('circle', {cx:handle[0], cy:handle[1], r:9, fill:'transparent', stroke:ink, 'stroke-width':1.5, id:'vh', style:'cursor:grab'}, svg);
+    document.getElementById('oAng').textContent = ang.value + '°';
+    document.getElementById('oBeta').textContent = b.toFixed(2);
+    const gap = Math.hypot(h21[0]-h12[0], h21[1]-h12[1]);
+    const regime = b === 0 ? 'identity' : b < 1 ? 'contraction' : b === 1 ? 'projection' : b < 2 ? 'contraction with sign flip' : 'pure reflection';
+    document.getElementById('readout').innerHTML =
+      `regime: <b>${regime}</b><br>‖v‖ = <b>${norm(v).toFixed(3)}</b> &nbsp; ‖H₂H₁v‖ = <b>${norm(h21).toFixed(3)}</b><br>distance between the two orders: <b>${gap.toFixed(3)}</b>`;
+  }
+  let dragging = false;
+  function pointer(e){
+    const r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * S / r.width, y = (e.clientY - r.top) * S / r.height;
+    let p = [(x - C)/K, (C - y)/K]; const n = norm(p); if (n > 2.3) p = [p[0]*2.3/n, p[1]*2.3/n];
+    return p;
+  }
+  svg.addEventListener('pointerdown', e => { dragging = true; svg.setPointerCapture(e.pointerId); v = pointer(e); draw(); });
+  svg.addEventListener('pointermove', e => { if (dragging){ v = pointer(e); draw(); } });
+  svg.addEventListener('pointerup', () => dragging = false);
+  ang.addEventListener('input', draw); beta.addEventListener('input', draw);
+
+  /* ---------------- charts ---------------- */
+  function chart(id, xs, xlabels, series, ymin, ymax, yticks, xtitle, ytitle, legendY){
+    const g = document.getElementById(id); g.innerHTML = '';
+    const W = 460, Hh = 280, L = 58, R = 34, T = 16, B = 44;
+    const muted = css('--muted'), line = css('--line'), ink = css('--ink');
+    const X = i => L + (W-L-R) * i / (xs.length - 1), Y = y => T + (Hh-T-B) * (1 - (y - ymin) / (ymax - ymin));
+    yticks.forEach(t => { el('line', {x1:L, x2:W-R, y1:Y(t), y2:Y(t), stroke:line}, g); const tx = el('text', {x:L-8, y:Y(t)+4, 'text-anchor':'end', 'font-size':11, fill:muted, 'font-family':'JetBrains Mono, monospace'}, g); tx.textContent = t; });
+    xlabels.forEach((t, i) => { const tx = el('text', {x:X(i), y:Hh-B+18, 'text-anchor':'middle', 'font-size':11, fill:muted, 'font-family':'JetBrains Mono, monospace'}, g); tx.textContent = t; });
+    const xt = el('text', {x:(L+W-R)/2, y:Hh-6, 'text-anchor':'middle', 'font-size':12, fill:muted, 'font-family':'Inter, sans-serif'}, g); xt.textContent = xtitle;
+    const yt = el('text', {x:14, y:(T+Hh-B)/2, 'text-anchor':'middle', 'font-size':12, fill:muted, 'font-family':'Inter, sans-serif', transform:`rotate(-90 14 ${(T+Hh-B)/2})`}, g); yt.textContent = ytitle;
+    series.forEach((s, k) => {
+      const color = css(s.color);
+      el('path', {d: s.y.map((y, i) => (i ? 'L' : 'M') + X(i) + ',' + Y(y)).join(' '), stroke:color, 'stroke-width':2.6, fill:'none', 'stroke-dasharray': s.dash || ''}, g);
+      s.y.forEach((y, i) => el('circle', {cx:X(i), cy:Y(y), r:4, fill:color}, g));
+      const lx = L + 12, ly = (legendY === undefined ? T + 14 : Y(legendY)) + 18*k;
+      el('line', {x1:lx, x2:lx+18, y1:ly-4, y2:ly-4, stroke:color, 'stroke-width':2.6, 'stroke-dasharray': s.dash || ''}, g);
+      const tx = el('text', {x:lx+24, y:ly, 'font-size':12, fill:ink, 'font-family':'Inter, sans-serif'}, g); tx.textContent = s.name;
+    });
+  }
+  function charts(){
+    chart('chartCtx', [128,512,2048,8192], ['128','512','2048','8192'],
+      [{name:'Saryu 25M', y:[1.643,1.516,1.562,1.467], color:'--red'},
+       {name:'Saryu 5M', y:[1.782,1.671,1.706,1.606], color:'--blue'}],
+      1.40, 1.90, [1.4,1.5,1.6,1.7,1.8,1.9], 'context length read', 'bits per character');
+    chart('chartLayers', [0,1,2,3], ['layer 1','layer 2','layer 3','layer 4'],
+      [{name:'mean β (2 = reflection)', y:[1.811,1.782,1.543,0.984], color:'--red'},
+       {name:'mean gate g (1 = overwrite)', y:[0.433,0.294,0.185,0.093], color:'--river2'},
+       {name:'share of exact reflections', y:[0.232,0.165,0.128,0.054], color:'--sun', dash:'5 4'}],
+      0, 2.2, [0,0.5,1,1.5,2], '', 'mean over tokens and heads', 1.42);
+  }
+
+  /* ---------------- copy buttons ---------------- */
+  document.querySelectorAll('button.copy').forEach(b => b.addEventListener('click', () => {
+    const text = b.parentElement.innerText.replace(/^copy\s*/, '').replace(/\s+#.*$/gm, '');
+    navigator.clipboard.writeText(text).then(() => { b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1400); });
+  }));
+
+  function all(){ draw(); charts(); }
+  all();
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', all);
+})();
+</script>
+</body>
+</html>

@@ -8,6 +8,7 @@
 [![Paper: draft v1](https://img.shields.io/badge/paper-draft%20v1-lightgrey.svg)](paper/main.pdf)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c.svg)](https://pytorch.org)
 
+[Website](https://varun29ankuS.github.io/saryu/) ·
 [Why it is built this way](#why-it-is-built-this-way) ·
 [Results](#results-character-level-enwik8) ·
 [Quickstart](#quickstart) ·
