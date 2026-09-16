@@ -1,0 +1,76 @@
+GATE FIX, ATTEMPT 1: MULTI-TIMESCALE HEADS -- NEGATIVE, AND THE TEST WAS INVALID
+scripts/train.py with GATE_TIMESCALES / WRITE_SCALE, 2026-09-16, CPU. 969,121 parameters (d=144,
+4 layers, 8 heads), first 4M characters of enwik8, context 512 (not 128: a model trained at 128
+has no gradient reason to remember further), batch 8, 1000 steps, AdamW 1e-3, seed 0.
+
+                                  bpc@128   bpc@512     effective context (probe)
+base (both off)                    2.2035    2.1404     frozen by 256 characters
+timescales                         2.2015    2.1361     frozen by 256 characters
+timescales + write scale           2.2090    2.1382     frozen by 256 characters
+
+Probe (evidence/effective_context.py, 8 windows, reference context 2048): in all three arms the
+state entering the scored text at context 512 matches the 2048-context state with cosine 1.000000
+in every layer and KL 0.000000, and bpc stops moving after 256. The gate change did nothing.
+
+WHY: THE INITIALISATION WAS ERASED AT EVERY STEP BY THE INPUT TERM.
+The gate is g = (1 - cos(W z + b))/2 per head. The intended ladder lives in b: biases were set so
+that retention 1/g spanned 2, 7, 23, 77, 260, 877, 2962, 10001 tokens. Measured on the trained
+models:
+
+  arm ts, layer 0   g(bias)   0.5014 0.1696 0.0599 0.0224 0.0066 0.0052 0.0044 0.0010  <- ladder kept
+                    |W row|   0.62   0.67   0.75   0.84   0.93   0.84   0.88   0.89
+                    g(actual) 0.5599 0.4587 0.4984 0.5026 0.2271 0.3770 0.4145 0.3540  <- ladder gone
+                    retention      2      2      2      2      4      3      2      3  tokens
+
+The bias for the long-memory head is 0.03 radians; the input term W z swings by roughly +-0.6
+radians because nn.Linear's default initialisation gives row norms near 0.8 at width 144. The
+ladder survives in the parameter and is swamped in the function. Layer 3 shows the same: biases
+decay to 0.0000 while actual gates sit at 0.013-0.41, best retention 76 tokens.
+
+So this is not evidence that multi-timescale gating fails. It is evidence that the experiment did
+not test it.
+
+NEXT ATTEMPT: scale g_proj.weight down (e.g. x0.01) when timescales is on, so the bias dominates at
+initialisation and each head learns to modulate around its own timescale instead of being drowned.
+Re-run the same three arms and the same probe. If the state still freezes by 256 with a working
+ladder, that IS evidence against the approach, and the convex write itself is the constraint --
+which is what Haller et al. 2025 (2504.14366) predict for additive update rules.
+
+SIDE NOTE: the write scale changed nothing here, as expected -- it cannot matter while every head's
+retention is 2-4 tokens.
+
+================================================================================================
+ATTEMPT 2: LADDER CORRECT IN THE FUNCTION -- STILL NEGATIVE, AND NOW THE TEST IS VALID
+Same setup, GATE_W_SCALE=0.01 so the gate's input term cannot swamp the per-head bias. Verified
+BEFORE training, on real text, that the ladder exists where it matters:
+
+  retention at init, layer 0:  2  7  23  76  266  869  2851  11011 tokens  (spread +-0.002)
+  (the old setting gave        2  7  16  17   30   41    42     34 tokens, spread +-0.15)
+
+                                  bpc@128   bpc@512     effective context (probe)
+base (both off)                    2.2035    2.1404     frozen by 256 characters
+timescales, corrected              2.2129    2.1465     frozen by 256 characters
+timescales + write scale           2.2210    2.1596     frozen by 256 characters
+
+RETENTION AFTER 1000 TRAINING STEPS -- the model threw the long heads away:
+
+  ts2  layer 0:   2   2   2   2   3   3    3    3 tokens   (was 2 ... 11011 at init)
+       layer 3:   2   8   6  20   7  51   26    6 tokens
+  tsw2 layer 0:   2   2   2   2   2   3    3    3 tokens
+       layer 3:   3   3   4  10  12  40  132    8 tokens
+
+WHAT THIS MEANS. The model was handed heads that could remember 11,000 characters and collapsed
+every one of them to 2-3 characters within 1000 steps, while its loss got slightly worse. So the
+limit is not the initialisation and not the parameterisation: at this scale and on this task,
+gradient descent has no use for long retention and actively removes it. That is the behaviour
+Haller et al. 2025 (2504.14366) predict for additive update rules -- irreversible state saturation
+-- and it says the write rule is the binding constraint, not the gate.
+
+THREE WAYS ON, in increasing cost:
+1. FREEZE the ladder (g_proj.bias fixed, only the input term learns) so training CANNOT collapse
+   it. If effective context still stops at 256 with genuinely long-retention heads, the write rule
+   is proven to be the constraint and the gate line of attack is closed.
+2. Give the task a reason to remember: character-level enwik8 at 1M parameters may genuinely need
+   only ~250 characters. A synthetic long-range task (recall at distance) would separate "cannot"
+   from "need not".
+3. The matrix memory in experimental/memory/, which stores facts outside the decaying state.

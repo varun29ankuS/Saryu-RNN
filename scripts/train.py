@@ -255,10 +255,28 @@ def parse_arms(spec, seeds):
 ARMS = (parse_arms(os.environ['ARMS'], os.environ.get('SEEDS', '0'))
         if os.environ.get('ARMS') else [('saryu-25M', 'adamw', 1e-3, 0)])
 results = []
+# gate options (defaults reproduce the trained configuration exactly); see saryu/model.py
+TIMESCALES = os.environ.get('GATE_TIMESCALES', '0') == '1'
+WRITE_SCALE = os.environ.get('WRITE_SCALE', '0') == '1'
+# with timescales on, the input term of the gate is scaled by this so the per-head bias ladder is
+# not swamped; 1.0 reproduces the first (invalid) attempt
+GATE_W_SCALE = float(os.environ.get('GATE_W_SCALE', 0.01))
+FREEZE_GATE_BIAS = os.environ.get('FREEZE_GATE_BIAS', '0') == '1'
+# chunk size is exact at any value; 32-64 is 3-6x faster than 8 on a T4 (evidence/results/
+# kernel_profile.txt). The released checkpoints were trained at 8.
+CHUNK_TRAIN = int(os.environ.get('CHUNK', 32))
+
+
+def _ctor(vocab, width, nl):
+    return SaryuV3LM(vocab, width, nl, timescales=TIMESCALES, write_scale=WRITE_SCALE,
+                     gate_w_scale=GATE_W_SCALE, freeze_gate_bias=FREEZE_GATE_BIAS,
+                     chunk=CHUNK_TRAIN)
+
+
 for name, mode, arm_lr, arm_seed in ARMS:
-    d, n = sized(SaryuV3LM, V, TARGET_PARAMS, NL)
+    d, n = sized(_ctor, V, TARGET_PARAMS, NL)
     torch.manual_seed(arm_seed)
-    m = SaryuV3LM(V, d, NL).to(DEV)
+    m = _ctor(V, d, NL).to(DEV)
     if mode != 'old':
         modern_init(m, NL)
     if mode == 'old':

@@ -36,6 +36,16 @@ def test_chunkwise_kernel_equals_sequential_recurrence(L):
     assert err < 1e-4, err
 
 
+@pytest.mark.parametrize('C', [4, 8, 16, 32, 64])
+def test_kernel_is_exact_at_every_chunk_size(C):
+    """The chunk size is a performance knob, not an approximation: on a T4 it is worth 3-6x
+    (evidence/results/kernel_profile.txt), so every value must give the same answer."""
+    with torch.no_grad():
+        args = _kernel_inputs(L=128)
+        err = float((chunkwise(*args, C) - sequential(*args)).abs().max())
+    assert err < 1e-4, (C, err)
+
+
 def test_pure_reflection_preserves_norm():
     """beta = 2 with no gate (a=1, b=0) is an orthogonal map: the state norm cannot change."""
     torch.manual_seed(1)

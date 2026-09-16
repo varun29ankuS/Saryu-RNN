@@ -50,6 +50,8 @@ torch.set_num_threads(int(os.environ.get('THREADS', 8)))
 def load(vocab_min=100):
     path = os.environ.get('CORPUS', os.path.join(ROOT, 'corpus', 'enwik8'))
     raw = open(path, 'rb').read().decode('utf-8', errors='ignore')
+    if os.environ.get('CHARS'):          # match a training run that capped the corpus
+        raw = raw[:int(os.environ['CHARS'])]
     cps = np.frombuffer(raw.encode('utf-32-le'), dtype=np.uint32)
     uniq, counts = np.unique(cps, return_counts=True)
     keep = np.sort(uniq[counts >= vocab_min])

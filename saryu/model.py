@@ -108,10 +108,28 @@ class RMSNorm(nn.Module):
 class SaryuV3Block(nn.Module):
     USE_KERNEL = True    # NaN-guard can flip this to the sequential path
 
-    def __init__(self, d, nh=NH, H=NHH):
+    def __init__(self, d, nh=NH, H=NHH, timescales=False, write_scale=False, gate_w_scale=0.01,
+                 freeze_gate_bias=False, chunk=CHUNK):
+        """timescales / write_scale are OFF by default: the defaults are the trained configuration,
+        so the released checkpoints load and reproduce exactly. They address the measured limit that
+        the trained models stop using context at about 512 characters
+        (evidence/results/effective_context.txt):
+
+        timescales   every head starts at the same gate (g ~ 0.04, retention ~25 tokens). With this
+                     on, the per-head gate biases are log-spaced so retention 1/g spans ~2 to
+                     ~10,000 tokens -- heads with different clocks.
+        write_scale  the write is g*c, so a head that wants to remember (g -> 0) also stops writing.
+                     A learned per-head scale w makes the write (g*w)*c, so a long-memory head can
+                     still write when it does write. The state stays bounded: the update is a convex
+                     mix of h and w*c, so ||h_t|| <= max(||h_0||, max_s w||c_s||)."""
         super().__init__()
         assert d % H == 0
         self.d, self.nh, self.H, self.dh = d, nh, H, d // H
+        # The kernel is exact for ANY chunk size, so this is purely a performance knob. The default
+        # 8 is what the released checkpoints were trained with, which keeps their logits identical.
+        # On a T4, fwd+bwd of one 25M layer at context 512 is 131 ms at 8 and 21 ms at 64
+        # (evidence/results/kernel_profile.txt), so training should pass 32 or 64.
+        self.chunk = chunk
         self.ln = nn.LayerNorm(d)
         self.conv = nn.Conv1d(d, d, 4, padding=3, groups=d)      # depthwise causal
         self.v_proj = nn.Linear(d, nh * d, bias=False)           # reflections, per head
@@ -121,6 +139,24 @@ class SaryuV3Block(nn.Module):
         nn.init.constant_(self.b_proj.bias, math.pi)
         self.g_proj = nn.Linear(d, H)                            # PER-HEAD scalar cos gate
         nn.init.constant_(self.g_proj.bias, 0.4)
+        if timescales:                       # g = (1-cos phi)/2, so phi = arccos(1-2g)
+            gh = torch.logspace(math.log10(0.5), math.log10(1e-4), H)
+            with torch.no_grad():
+                self.g_proj.bias.copy_(torch.arccos(1.0 - 2.0 * gh))
+                # The ladder lives in the bias, and the default input term erases it: at width 144
+                # the rows of g_proj.weight have norm ~0.8, swinging the gate by ~+-0.6 radians
+                # against a 0.03-radian bias for the long-memory head, so every head ended up
+                # retaining 2-4 tokens (evidence/results/gate_timescales.txt). Shrinking the input
+                # term lets each head start at its own timescale and learn to modulate around it.
+                self.g_proj.weight.mul_(gate_w_scale)
+        if freeze_gate_bias:
+            # attempt 2 gave heads retentions of 2 to 11,011 tokens and training collapsed every one
+            # of them to 2-3 within 1000 steps (evidence/results/gate_timescales.txt). Freezing the
+            # bias leaves only the input term learnable, so the ladder cannot be destroyed: if the
+            # effective context STILL stops at ~256, the write rule is the constraint, not the gate.
+            self.g_proj.bias.requires_grad_(False)
+        # softplus(0.5413) = 1.0, so the write starts exactly as it does without this option
+        self.w_raw = nn.Parameter(torch.full((H,), 0.5413)) if write_scale else None
         self.c_proj = nn.Linear(d, d)
         self.hnorm = RMSNorm(self.dh)
         self.og = nn.Linear(d, d)                                # silu output gate
@@ -137,7 +173,8 @@ class SaryuV3Block(nn.Module):
         if ve is not None:                      # value embeds into the write
             cz = cz + ve
         c = cz.view(B, L, self.H, self.dh)
-        return u, beta, 1.0 - g, g[..., None] * c
+        gw = g if self.w_raw is None else g * F.softplus(self.w_raw).clamp(max=4.0)
+        return u, beta, 1.0 - g, gw[..., None] * c
 
     def forward(self, x, ve=None):
         B, L, _ = x.shape
@@ -150,7 +187,8 @@ class SaryuV3Block(nn.Module):
         af = a.permute(0, 2, 1).reshape(B * self.H, L)
         bbf = b.permute(0, 2, 1, 3).reshape(B * self.H, L, self.dh)
         h0 = self.h0[None].expand(B, self.H, self.dh).reshape(B * self.H, self.dh)
-        s = (chunkwise if SaryuV3Block.USE_KERNEL else sequential)(h0, uf, bf_, af, bbf)
+        s = (chunkwise(h0, uf, bf_, af, bbf, self.chunk) if SaryuV3Block.USE_KERNEL
+             else sequential(h0, uf, bf_, af, bbf))
         s = s.view(B, self.H, L, self.dh).permute(0, 2, 1, 3)
         s = self.hnorm(s).reshape(B, L, self.d)
         return self.out(s * F.silu(self.og(z)))
@@ -173,14 +211,18 @@ class SwiGLU(nn.Module):
 class SaryuV3LM(nn.Module):
     kind = 'saryu-v3'
 
-    def __init__(self, vocab, d, nl, use_vemb=False):
+    def __init__(self, vocab, d, nl, use_vemb=False, timescales=False, write_scale=False,
+                 gate_w_scale=0.01, freeze_gate_bias=False, chunk=CHUNK):
         super().__init__()
         self.emb = nn.Embedding(vocab, d)
         nn.init.normal_(self.emb.weight, std=0.02)
         self.vemb = nn.Embedding(vocab, d) if use_vemb else None
         if self.vemb is not None:
             nn.init.normal_(self.vemb.weight, std=0.02)
-        self.mix = nn.ModuleList([SaryuV3Block(d) for _ in range(nl)])
+        self.mix = nn.ModuleList([SaryuV3Block(d, timescales=timescales, write_scale=write_scale,
+                                               gate_w_scale=gate_w_scale, chunk=chunk,
+                                               freeze_gate_bias=freeze_gate_bias)
+                                  for _ in range(nl)])
         self.ffn = nn.ModuleList([SwiGLU(d) for _ in range(nl)])
         self.lnf = nn.LayerNorm(d)
         self.head = nn.Linear(d, vocab)
@@ -205,6 +247,7 @@ def load_checkpoint(path, map_location='cpu'):
     st = ck['state']
     model = SaryuV3LM(st['emb.weight'].shape[0], ck['d'], len({k.split('.')[1] for k in st
                                                                if k.startswith('mix.')}),
-                      use_vemb='vemb.weight' in st)
+                      use_vemb='vemb.weight' in st,
+                      write_scale='mix.0.w_raw' in st)   # timescales only affect init, not the keys
     model.load_state_dict(st)
     return model, ck

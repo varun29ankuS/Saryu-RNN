@@ -1,0 +1,36 @@
+WHERE A TRAINING STEP'S TIME GOES ON A GPU, AND A FREE 3-6x FROM THE CHUNK SIZE
+Measured 2026-09-16 on one Tesla T4, torch 2.10, repo at a9eb319.
+Exactness on device first: max |chunkwise - sequential| = 4.77e-07.
+
+SHARE OF A FULL TRAINING STEP (forward + backward + optimiser), chunk size 8 as shipped:
+
+  shape                        step      recurrence (4 layers)     share
+  5M   d=328 B=48 L=128      212.5 ms          136.4 ms           64.2%
+  5M   d=328 B=8  L=512      737.0 ms          529.2 ms           71.8%
+  25M  d=744 B=48 L=128      443.4 ms          154.5 ms           34.8%
+  25M  d=744 B=8  L=512      761.1 ms          542.2 ms           71.2%
+
+So the recurrence is 35-72% of a step: a fused kernel is worth real effort, but see below first.
+
+CHUNK SIZE IS A LARGE GPU LEVER, AND IT IS FREE. The kernel is exact for ANY chunk size (it is an
+algebraic rearrangement, not an approximation), so this is a pure performance knob:
+
+  d=328 B=48 L=128 (384 rows, dh=41)        d=744 B=8 L=512 (64 rows, dh=93)
+    C=8   fwd+bwd  33.80 ms                   C=8   fwd+bwd 131.08 ms
+    C=16  fwd+bwd  17.44 ms  (1.9x)           C=16  fwd+bwd  67.24 ms  (1.9x)
+    C=32  fwd+bwd  10.93 ms  (3.1x)           C=32  fwd+bwd  34.03 ms  (3.9x)
+    C=64  fwd+bwd  12.08 ms  (2.8x)           C=64  fwd+bwd  21.01 ms  (6.2x)
+
+  max |difference vs C=8| <= 3.3e-06 everywhere, i.e. float noise.
+
+The CPU sweep said the opposite (135 ms at C=8, 194 ms at C=64) because there the O(C^2) Gram and
+triangular solve dominate. On a GPU the per-chunk work is tiny and the Python loop's kernel-launch
+overhead dominates, so fewer, larger chunks win: L=512 at C=8 is 64 launches per layer per pass.
+
+CONSEQUENCE. At 25M with context 512 the recurrence falls from 542 ms to about 84 ms, taking the
+step from 761 ms to roughly 300 ms -- about 2.5x faster training for a one-line change. Best C
+depends on the shape (32 at L=128, 64 at L=512), so it is a parameter, not a new constant.
+
+WHAT THIS DOES TO THE FUSED-KERNEL PLAN. After the chunk fix the recurrence is roughly 10-25% of a
+step rather than 35-72%, so the ceiling on a hand-written Triton kernel drops sharply. Re-profile
+with the new default before spending days on a kernel that cannot be tested off-GPU.
