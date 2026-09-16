@@ -66,6 +66,10 @@ NPAIRS = int(os.environ.get('NPAIRS', 4))
 GAPS = [int(x) for x in os.environ.get('GAPS', '16,64,256,512').split(',')]
 CHAIN_LENS = [int(x) for x in os.environ.get('CHAIN_LENS', '4,16,48').split(',')]
 SEED = int(os.environ.get('SEED', 0))
+# The 2026-09-15 transformer triage in this project measured 4-pair MQAR at lr 3e-4 -> 1.000 on 3/3
+# seeds, jumping at step 1000-1500, and at lr 1e-3 -> below 0.21. The first run here used 1e-3 for
+# 800 steps, i.e. the rate that fails, stopped before the jump. LR is a knob for that reason.
+LR = float(os.environ.get('LR', 1e-3))
 NENT, NREL = 64, 4
 torch.set_num_threads(int(os.environ.get('THREADS', 8)))
 
@@ -113,8 +117,8 @@ def run(kind, args, seqlen, label):
     _, _, _, V = vocab(NENT, NREL)
     torch.manual_seed(SEED)
     m = SaryuV3LM(V, D, NL, **MODEL_KW)
-    opt = torch.optim.AdamW(m.parameters(), lr=1e-3, weight_decay=0.01)
-    sch = torch.optim.lr_scheduler.OneCycleLR(opt, 1e-3, total_steps=STEPS, pct_start=0.1)
+    opt = torch.optim.AdamW(m.parameters(), lr=LR, weight_decay=0.01)
+    sch = torch.optim.lr_scheduler.OneCycleLR(opt, LR, total_steps=STEPS, pct_start=0.1)
     rng = np.random.default_rng(1000 + SEED)
     t0 = time.time()
     every = max(1, STEPS // 8)
@@ -147,7 +151,8 @@ def run(kind, args, seqlen, label):
 if __name__ == '__main__':
     seqlen = 2 * NPAIRS + max(GAPS) + 2
     chain_seqlen = 3 * max(CHAIN_LENS) + max(CHAIN_LENS) + 4
-    print(f'arm {ARM!r}  d={D} nl={NL} steps={STEPS} seed={SEED}  options={MODEL_KW}')
+    print(f'arm {ARM!r}  d={D} nl={NL} steps={STEPS} lr={LR:g} npairs={NPAIRS} seed={SEED}  '
+          f'options={MODEL_KW}')
     print(f'recall: {NPAIRS} pairs, gaps {GAPS}, sequence {seqlen}  |  chance = 1/{NENT}')
     run('recall', GAPS, seqlen, 'recall')
     print(f'transport (ordered, the control): lengths {CHAIN_LENS}, sequence {chain_seqlen}')

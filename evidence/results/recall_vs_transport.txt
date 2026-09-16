@@ -1,4 +1,12 @@
-THE VECTOR STATE COMPOSES PERFECTLY AND STORES NOTHING
+*** SUPERSEDED IN PART, 2026-09-16: see recall_by_construction.txt. The measurements below stand.
+*** The explanation -- "there is no slot an item can be written to" -- was wrong. A vector state
+*** stores 4-8 facts per head with a full-rank binding operator (permutation or FHRR phase). What
+*** cannot bind is the reflection itself: it is a rank-one update that leaves a vector 98% unchanged
+*** at head dimension 93. Also note the runs below used lr 1e-3 for 800 steps, and this project's
+*** own triage found 4-pair recall solvable at 3e-4 and NOT at 1e-3, jumping at step 1000-1500, so
+*** learnability is being retested separately.
+
+THE VECTOR STATE COMPOSES PERFECTLY AND (WITH THIS BINDING OPERATOR) STORES NOTHING
 evidence/recall_distance.py, 2026-09-16, CPU. Same model for both tasks: d=128, 2 layers, 8 heads,
 2 reflections, AdamW 1e-3 one-cycle, 800 steps, batch 16, seed 0. Chance on both tasks is 1/64 =
 0.0156. Prediction registered in the script's docstring before running.

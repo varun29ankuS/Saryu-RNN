@@ -1,0 +1,58 @@
+WHY RECALL FAILS: THE REFLECTION IS A RANK-ONE UPDATE, SO IT CANNOT BIND
+evidence/recall_by_construction.py, 2026-09-16, CPU. No training, no optimiser: weights are set by
+hand, so this measures REPRESENTABILITY, not learnability.
+
+THIS CORRECTS recall_vs_transport.txt, which concluded "the vector state composes perfectly and
+stores nothing". The observation stands; the explanation was wrong. A vector state CAN store and
+address several facts. What cannot bind them is the reflection.
+
+1. RECALL BY CONSTRUCTION, reflect-to-bind / superpose / reflect-to-unbind (chance = 1/pairs):
+
+     head dim      1 pair   2      4      8      16
+            8      1.000  0.865  0.420  0.270  0.100
+           40      1.000  0.845  0.370  0.190  0.055   <- 5M head dim
+           93      1.000  0.845  0.330  0.140  0.095   <- 25M head dim
+
+   One pair is perfect, two is usable, four is near chance. Capacity does NOT grow with dimension;
+   it shrinks. That inversion is the clue.
+
+2. WHY: one Householder barely moves a vector in high dimensions. H(u)v = v - 2(u.v)u is RANK ONE,
+   and for random unit vectors u.v ~ 1/sqrt(d):
+
+     head dim   ||H(u)v - v||   cos(H(u)v, v)
+            8          0.566          0.7586
+           40          0.243          0.9545
+           93          0.167          0.9795
+          256          0.099          0.9927
+
+   At the 25M model's head dimension a reflection leaves a random vector 98% unchanged. An operator
+   that does not change a vector cannot hide it against a key, so the stored values superpose almost
+   unmodified and the query cannot separate them. Larger heads make this worse, which is exactly the
+   inversion in (1).
+
+3. BINDING OPERATORS COMPARED, identical test, head dim 64:
+
+       operator        1      2      4      8      16
+     reflection    1.000  0.840  0.450  0.180  0.070
+     permutation   1.000  1.000  1.000  0.950  0.580
+     fhrr phase    1.000  1.000  1.000  0.930  0.590
+
+   Permutation and phase binding scramble the WHOLE vector, so interference falls as 1/sqrt(d) and
+   capacity grows with dimension. Four facts are stored perfectly and eight nearly so, in the same
+   vector state the reflection failed in.
+
+WHAT THIS MEANS
+- The vector state is not the problem. The binding operator is.
+- The same rank-one property explains both results: a near-identity nudge per token composes into
+  arbitrary rotations over many tokens (transport is solved at every length) and cannot conceal a
+  value in one step (recall is at chance).
+- experimental/memory/saryu_block.py ALREADY uses FHRR phase binding, chosen on measurements that
+  found it "matches unbound capacity at every load" where a Hadamard product cost 0.155. That choice
+  is now explained from first principles rather than empirically: phase binding is full-rank.
+- So the route is not necessarily a matrix memory. A vector state with a proper binding operator
+  stores 4-8 facts per head; at 8 heads that is 32-64 facts per layer, for no extra state at all.
+
+STILL OPEN: learnability. This shows the weights EXIST. Whether training finds them is a separate
+question, being tested by a learning-rate and task-size ladder (this project's own transformer triage
+found 4-pair MQAR solvable at lr 3e-4 and not at 1e-3, jumping at step 1000-1500, and the earlier
+recall run used 1e-3 for 800 steps).
