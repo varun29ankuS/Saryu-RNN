@@ -1,0 +1,385 @@
+% Saryu, paper B draft v1: what a trained reflection transport does when it cannot solve a group.
+% Build:  cd paper && pdflatex paperB && pdflatex paperB
+\documentclass[10pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,xcolor,microtype,caption,enumitem,graphicx,float}
+\usepackage{tikz,pgfplots}
+\pgfplotsset{compat=1.17}
+\usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+
+\newtheorem{proposition}{Proposition}
+\newenvironment{proof}{\par\noindent\textit{Proof.}\ }{\hfill$\square$\par\medskip}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\bu}{\mathbf{u}}
+\newcommand{\bh}{\mathbf{h}}
+\newcommand{\bv}{\mathbf{v}}
+
+\title{\textbf{Quantised failure: trained reflection transports collapse onto exact group quotients}\\[4pt]
+\large Technical report --- draft v1}
+\author{Varun Sharma}
+\date{16 September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+A recurrent layer whose state is moved by products of Householder reflections can be trained on the
+word problem of a finite group: read a sequence of group elements, report the product. When such a
+layer succeeds it is exact at any length, because it has learned a homomorphism. When it fails, it
+does not fail arbitrarily. Its accuracy lands on $1/|N|$ for a normal subgroup $N$ --- it has learned
+the quotient $G/N$, gets the coset right, and guesses inside it. We give the proven ceiling that
+makes the phenomenon measurable, the rung structure across several groups, a control at matched group
+order that separates the lattice from the order, a table-free diagnostic based on characters, and the
+tasks where a quotient is sufficient rather than a failure. We also report the same invariant
+appearing in an unrelated role: the normalised trace that identifies which quotient a transport
+learned is the quantity that governs how much information the same transport can bind and store.
+\end{abstract}
+
+% ======================================================================================
+\section{The phenomenon}
+
+Train the transport of Section~\ref{sec:setup} on the word problem of $S_4$ and it either reaches
+$1.000$ and stays there as the evaluation length grows to $8\times$ the training length, or it settles
+on one of a small set of values: $0.250$, $0.083$, $0.042$. Those are $1/4$, $1/12$, $1/24$, and the
+normal subgroups of $S_4$ are $1$, $V_4$ (order 4), $A_4$ (order 12) and $S_4$ itself. A model that
+has learned $G/N$ knows which coset the answer lies in and cannot do better than guessing inside it,
+so its accuracy is exactly $1/|N|$.
+
+The claim of this paper is that this is what failure looks like for this architecture, that it can be
+verified rather than inferred from a coincidence of four numbers, and that the same algebra predicts a
+second, apparently unrelated limitation of the same layer.
+
+\paragraph{What makes it checkable.} Three things, in increasing strength.
+\begin{enumerate}[leftmargin=*,itemsep=2pt]
+  \item \textbf{Flatness.} A homomorphism is length-independent. Every claim below is scored at a
+        length far beyond training, and runs whose accuracy drifts with length are excluded rather
+        than scored: they are not homomorphisms and the law says nothing about them.
+  \item \textbf{Coset consistency.} If the model learned $G/N$, its \emph{errors} must respect
+        cosets: predicted and true element in the same coset of $N$, essentially always. A model that
+        is merely bad has no reason to respect any coset.
+  \item \textbf{A proven ceiling.} For a commuting transport the product is order-independent, so the
+        output can only be a function of the multiset of inputs; the best such function is computable
+        by enumeration and is a hard bound.
+\end{enumerate}
+
+% ======================================================================================
+\section{Setup}
+\label{sec:setup}
+
+The setup is deliberately not the language model of paper A. There is no input projection and no
+gate: each group element $g$ owns a learned table of $n_h$ reflection vectors $\bu_{g,1..n_h}\in\R^d$
+and coefficients $\beta_{g,i}$, and the transport it induces is their product,
+\[
+  T_g \;=\; \prod_{i=1}^{n_h} \bigl(I - \beta_{g,i}\,\hat\bu_{g,i}\hat\bu_{g,i}^\top\bigr),
+  \qquad \hat\bu = \bu/\|\bu\| ,
+\]
+initialised at $\beta=2$, i.e.\ at pure reflections. The state starts at a learned $\bh_0$, each token
+applies its own $T_g$, and a linear readout maps the state to the $|G|$ classes. Giving every element
+its own transport removes the question of whether a shared projection can separate the elements and
+leaves only the question this paper asks: can a \emph{product of reflections} realise the group?
+
+Training reads a word $g_1\dots g_L$ and is supervised on the running product at every prefix, with
+an explicit group-law penalty added to the cross-entropy:
+\[
+  \mathcal{L} \;=\; \mathrm{CE}\bigl(\text{readout}(\bh_t),\, g_1\cdots g_t\bigr)
+  \;+\; \lambda\,\mathbb{E}_{\bh,a,b}\,\bigl\|\,T_b T_a \bh - T_{ab}\,\bh\,\bigr\| / \sqrt{d},
+  \qquad \lambda = 1 ,
+\]
+the expectation taken over 64 random triples per step. The penalty asks directly for a homomorphism
+rather than hoping one emerges, which is what makes a failure interpretable: a model that ends with a
+small penalty and sub-unit accuracy has learned \emph{some} homomorphism, and the question is which.
+
+Unless stated otherwise: $n_h=4$, $d=4$ for $S_4$ and $Q_8$ and $d=5$ for $A_5$, AdamW at
+$2\times10^{-3}$ with weight decay $0.01$ and gradients clipped at $1.0$, batch 256, 2000 steps,
+trained at length $L=12$ and evaluated at $L=12$ and $L=96$ on 1024 held-out words each. A run counts
+as \emph{flat}, and so as a candidate homomorphism, when the two accuracies differ by less than
+$0.05$.
+
+% ======================================================================================
+\section{The abelian ceiling}
+\label{sec:ceiling}
+
+Before asking which quotient a transport learns, it is worth fixing a bound that no amount of
+training can move, because it converts one architectural property --- whether the transports commute
+--- into a number.
+
+\begin{proposition}[multiset bound]
+If the transports commute, the accuracy on the length-$L$ word problem of $G$ cannot exceed
+\[
+  C(G,L) \;=\; \sum_{M} \Pr[M]\;\max_{g\in G}\,\Pr\bigl[\,g_1\cdots g_L = g \mid M\,\bigr],
+\]
+the sum running over multisets $M$ of $L$ elements.
+\end{proposition}
+\begin{proof}
+If $T_aT_b=T_bT_a$ for all $a,b$, the state after reading a word depends on the word only through how
+many times each element occurs, so the prediction is a function of $M$. The best such function
+returns, for each $M$, the most probable product, which is the stated sum.
+\end{proof}
+
+The bound is computable by enumeration, and at $L=8$ we evaluate it exactly over all $1287$ multisets
+of six elements: $C(\mathbb{Z}_6,8)=1.0000$ and $C(S_3,8)=0.3850$. The pair is matched in order, so a
+transport that clears $0.385$ on $S_3$ has done something order-sensitive, and nothing about the size
+of the group can explain it away.
+
+\begin{table}[H]\centering\small
+\caption{Matched-order test at $L=8$, three seeds. The ceiling is proven, not fitted. Commuting
+transports sit on it; the reflection transport passes it on $S_3$.}
+\begin{tabular}{llcc}
+\toprule
+transport & commuting? & $\mathbb{Z}_6$ & $S_3$ \\
+\midrule
+diagonal rotation & yes & $1.000\pm0.000$ & $0.388\pm0.006$ \\
+single Givens     & yes & $1.000\pm0.000$ & $0.389\pm0.003$ \\
+Householder product ($n_h=4$) & no & $1.000$ & $0.778$ \\
+butterfly         & no  & $1.000\pm0.000$ & $0.779\pm0.380$ \\
+transformer       & --- & $0.166\pm0.004$ & $0.167\pm0.003$ \\
+\midrule
+\textit{proven ceiling for any commuting transport} & & $1.000$ & $\mathbf{0.385}$ \\
+\bottomrule
+\end{tabular}
+\label{tab:ceiling}
+\end{table}
+
+Two honest qualifications. The $\pm0.380$ on the butterfly row is a spread across seeds wide enough
+that some seeds solve the task and others fail below the ceiling; the mean exceeding $0.385$ says the
+ceiling \emph{can} be passed, not that it reliably is. And clearing the ceiling on $S_3$ does not
+imply clearing it everywhere: on the same ladder the reflection transport reaches $0.374$ on $Q_8$
+against a ceiling of $0.544$, $0.085$ on $A_4$ against $0.286$, and chance on $S_4$ and $A_5$. Being
+non-commuting removes a ceiling; it does not supply an optimiser that finds what lies above it. The
+rest of this paper is about where those runs land instead.
+
+% ======================================================================================
+\section{The lattice law}
+\label{sec:lattice}
+
+A transport that ends training with a small group-law penalty is a homomorphism $\rho: G\to O(d)$
+composed with a readout. Its kernel $N=\ker\rho$ is a normal subgroup, elements of the same coset of
+$N$ are indistinguishable to it, and its accuracy is therefore $1/|N|$. The set of achievable
+accuracies is thus the set $\{1/|N| : N \trianglelefteq G\}$ --- the \emph{rungs} --- which is a
+property of the group alone and is invisible to the model. We enumerate the normal subgroups of each
+group directly (unions of conjugacy classes closed under the product) rather than quoting them:
+$S_4$ gives orders $1,4,12,24$; $Q_8$, being Hamiltonian, gives $1,2,4,4,4,8$; $A_5$, being simple,
+gives only $1,60$.
+
+\begin{table}[H]\centering\small
+\caption{Four seeds per group. Every run is flat, so every run is a candidate homomorphism, and every
+one lands on a rung of its own group. Worst deviation across all twelve runs: $0.021$.}
+\begin{tabular}{lcccc}
+\toprule
+group (rungs) & seed & $L=12$ & $L=96$ & nearest rung (dev.) \\
+\midrule
+$Q_8$  & 0 & 0.247 & 0.241 & 0.250 (0.009) \\
+$1.000\;0.500\;0.250\;0.125$ & 1 & 0.498 & 0.521 & 0.500 (0.021) \\
+                             & 2 & 1.000 & 1.000 & 1.000 (0.000) \\
+                             & 3 & 0.264 & 0.243 & 0.250 (0.007) \\
+\midrule
+$S_4$  & 0 & 1.000 & 1.000 & 1.000 (0.000) \\
+$1.000\;0.250\;0.083\;0.042$ & 1 & 0.081 & 0.100 & 0.083 (0.017) \\
+                             & 2 & 0.264 & 0.251 & 0.250 (0.001) \\
+                             & 3 & 0.257 & 0.259 & 0.250 (0.009) \\
+\midrule
+$A_5$  & 0 & 0.015 & 0.020 & 0.017 (0.003) \\
+$1.000\;0.017$               & 1 & 0.009 & 0.021 & 0.017 (0.004) \\
+                             & 2 & 0.018 & 0.014 & 0.017 (0.003) \\
+                             & 3 & 0.015 & 0.016 & 0.017 (0.001) \\
+\bottomrule
+\end{tabular}
+\label{tab:rungs}
+\end{table}
+
+\paragraph{Which rungs are actually informative.} The bottom rung $1/|G|$ coincides with chance, so a
+run landing there is consistent with the law but tells us nothing: it is the trivial quotient and the
+absence of learning at once. This applies to all four $A_5$ runs, at $0.017$. The registered
+falsifier for $A_5$ --- a flat accuracy strictly between $0.017$ and $1.000$, which a simple group
+forbids --- was not triggered, but neither did any $A_5$ run solve the task, so the group contributes
+a consistency check rather than a positive result. The load is carried by the intermediate rungs that
+are neither chance nor perfect: $Q_8$ at $0.500$ and $0.250$, and $S_4$ at $0.250$ and $0.083$.
+
+\paragraph{Coset consistency.} Accuracy alone could be a numerical coincidence, so we test the
+mechanism on the errors. If a model learned $G/N$, its predictions must land in the correct coset of
+$N$ essentially always, and the kernel is identified as the \emph{smallest} $N$ whose coset score
+reaches $1.000$ --- read off the errors, with no reference to the accuracy. The accuracy predicted by
+that independently identified $N$ then matches the measured one on all five $S_4$ runs tested:
+
+\begin{table}[H]\centering\small
+\caption{The subgroup identified by the errors predicts the accuracy. Coset scores are the fraction
+of predictions landing in the correct coset.}
+\begin{tabular}{cccccll}
+\toprule
+raw acc. & $1$ & $V_4$ & $A_4$ & $S_4$ & identified $N$ & $1/|N|$ \\
+\midrule
+1.000 & 1.000 & 1.000 & 1.000 & 1.000 & $1$ (faithful) & 1.000 \\
+1.000 & 1.000 & 1.000 & 1.000 & 1.000 & $1$ (faithful) & 1.000 \\
+0.230 & 0.230 & 0.999 & 0.999 & 1.000 & $V_4$ & 0.250 \\
+0.081 & 0.081 & 0.329 & 1.000 & 1.000 & $A_4$ & 0.083 \\
+0.042 & 0.042 & 0.165 & 0.472 & 1.000 & $S_4$ & 0.042 \\
+\bottomrule
+\end{tabular}
+\label{tab:coset}
+\end{table}
+
+\paragraph{A measurement we withdraw.} Our earlier runs also reported a per-run kernel size, obtained
+by clustering the transports $M[g]=\mathbb{E}_\bh\,T_g\bh$ and setting $|\ker| = |G|/(\#\text{clusters})$.
+That estimator is invalid: $T_g$ is linear and $\bh$ is zero-mean, so $M[g]$ is a Monte-Carlo zero for
+every $g$ and the clustering runs on sampling noise. Measured, $\|M[g]\|$ is $5.7\%$ of the typical
+$\|T_g\bh\|$, below the clustering threshold; applied to an \emph{untrained} model whose $24$
+transports are independent random draws and whose true kernel is trivial, it reports $|\ker|=8$. It
+returned orders that are not normal subgroup orders at all --- $8$ for $S_4$, $30$ for $A_5$ --- in 4
+of 12 runs, which is how the fault was found. Nothing in this paper rests on that column; the kernel
+is identified by coset consistency instead.
+
+% ======================================================================================
+\section{The same-order control}
+
+The cross-group evidence is confounded by group order, since a 24-element problem and an 8-element
+problem differ in chance level as well as in lattice. The control removes it: $S_4$ and $\mathrm{SL}(2,3)$
+both have order 24, and their rungs are disjoint apart from the endpoints.
+\[
+  S_4:\; 1.000,\ 0.250,\ 0.083,\ 0.042 \qquad\qquad \mathrm{SL}(2,3):\; 1.000,\ 0.500,\ 0.125,\ 0.042
+\]
+Across four registered runs (2400 steps, 1200 steps, an $S_4$-only run at 1800 steps, and a run at
+width 3), 28 failures were flat enough to score. Every one landed on a rung of its own group, 13 of
+them on a rung the other group does not possess, and none within 0.03 of the other group's exclusive
+rungs. One run missed its registered tolerance --- $\mathrm{SL}(2,3)$ at 0.469 against a predicted
+0.500, with coset consistency 1.000 --- so the registered verdict is \emph{falsified}, and we report it
+as such; in binomial standard errors that miss is $z=-2.00$, the only $|z|>1.96$ among the 28, which
+says the tolerance was set too tight rather than that the law failed. The runs, their predictions and
+their verdicts are in the repository.
+
+% ======================================================================================
+\section{Characters as a table-free diagnostic}
+\label{sec:char}
+
+Identifying the kernel by coset consistency needs the group table. There is a diagnostic that does
+not. For a representation $\rho$ with character $\chi(g)=\operatorname{tr}\rho(g)$, the norm
+\[
+  \langle\chi,\chi\rangle \;=\; \frac{1}{|G|}\sum_{g\in G}\chi(g)^2 \;=\; \sum_i m_i^2
+\]
+counts irrep multiplicities, and needs only traces of the learned transports --- no labels, no Cayley
+table, no character table. Enumerating every way to build a $4$-dimensional representation of $S_4$
+and intersecting the kernels of its parts gives what each value implies:
+
+\begin{center}\small
+\begin{tabular}{lll}
+\toprule
+kernel & quotient realised & attainable $\langle\chi,\chi\rangle$ at $d=4$ \\
+\midrule
+$1$ & $S_4$ (faithful) & $2$ \\
+$V_4$ & $S_3$ & $3,\;4,\;5$ \\
+$A_4$ & $\mathbb{Z}_2$ & $8,\;10,\;16$ \\
+$S_4$ & trivial & $16$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At $d=4$ the value $2$ is attainable \emph{only} by a faithful representation, so it is a sufficient
+certificate of faithfulness. That statement is conditional on full rank, and the condition is not
+decorative: a trained transport may let a dimension die, and at $d=3$ the value $2$ means kernel
+$V_4$, at $d=2$ kernel $A_4$. We observe exactly this --- runs that solve the task with
+$\langle\chi,\chi\rangle\approx1.12$ and a single $3$-dimensional irrep carrying the whole state. The
+diagnostic must therefore be read together with the effective rank, not on its own.
+
+A second condition matters more. $\langle\chi,\chi\rangle$ is a character norm only if the transport
+\emph{is} a representation. In our runs the solved models carry a group-law violation of $\approx
+0.008$ and measure $\langle\chi,\chi\rangle = 1.99$--$2.01$, agreeing with the table; the failed runs
+carry violations of $0.10$--$0.29$, are not homomorphisms at all, and their measured values
+($4.4$--$5.5$) are not character norms of anything and should not be read as quotient labels. The
+predicted quotient values are so far confirmed in one clean instance rather than as a set: a model
+that solves the $V_4$ task exactly (Section~\ref{sec:quotient}) decomposes as two copies of the
+trivial irrep plus the $2$-dimensional one, giving $\langle\chi,\chi\rangle = 2^2+1^2 = 5$ with
+kernel $V_4$, as the table requires.
+
+Finally, the diagnostic does not work as a training signal. An arm that adds a penalty driving the
+mean squared trace toward $2.0$ --- no table, no labels, nothing but traces --- solved 2 of 6 seeds
+against 3 of 6 for the unregularised baseline. It certifies a representation; it does not produce
+one.
+
+% ======================================================================================
+\section{The same invariant governs binding}
+\label{sec:binding}
+
+The diagnostic above is a character: $\chi(g)=\operatorname{tr}(g)$, and $\langle\chi,\chi\rangle$
+identifies the learned quotient without the group table. The same quantity controls a capability that
+has nothing to do with group word problems.
+
+For an orthogonal $g$ acting on the sphere, the expected overlap of a random unit vector with its
+image is the normalised trace,
+\[
+  \mathbb{E}\,[\,\bv^\top g\,\bv\,] = \operatorname{tr}(g)/d ,
+\]
+which is exactly how much an operation \emph{hides} a vector --- the property a binding operation
+needs if a value is to be stored against a key and recovered later. A single Householder reflection
+has $\operatorname{tr}=d-2$, the least-hiding non-trivial element of $O(d)$, and a product of $k$
+reflections gives overlap $\approx e^{-2k/d}$. Measured at head dimension 64, with weights set by hand
+and no training, capacity follows the trace exactly: four associations are recalled at $0.453$ with
+$k=2$ and at $1.000$ with $k=32\approx d/2$.
+
+So the same transport is a tracker at small $k$ and an associative store at $k\approx d/2$, and the
+character is what separates the regimes. A layer that composes group elements perfectly and cannot
+retain one fact among four is not exhibiting two unrelated limitations; it is at one end of a single
+curve.
+
+% ======================================================================================
+\section{What a quotient is good for}
+\label{sec:quotient}
+
+Calling a quotient a failure assumes the task needed the whole group. Change the target to the coset
+of $N$ and the same collapse becomes the correct answer: the $V_4$ task asks for the $V_4$-coset of
+the product ($6$ classes, chance $0.167$) and needs only $S_4/V_4\cong S_3$; the $A_4$ task asks for
+the $A_4$-coset ($2$ classes, chance $0.500$) and needs only $S_4/A_4\cong\mathbb{Z}_2$.
+
+Solve rates rise as the required group shrinks --- 2 of 4 seeds on the full task, 2 of 4 on $V_4$,
+3 of 4 on $A_4$ --- but the sharper result is where the \emph{failures} land. If the law of
+Section~\ref{sec:lattice} is really about the group being learned, then on a quotient task it should
+apply to the quotient, and the rungs should be those of $S_3$ and $\mathbb{Z}_2$ rather than those of
+$S_4$. The normal subgroups of $S_3$ have orders $1,3,6$, giving rungs $1.000$, $0.333$, $0.167$;
+those of $\mathbb{Z}_2$ give $1.000$ and $0.500$. Neither $0.333$ nor $0.500$ is a rung of $S_4$.
+
+\begin{table}[H]\centering\small
+\caption{The lattice law one level down. All eight runs land on a rung of the \emph{quotient} they
+are asked for; worst deviation $0.013$.}
+\begin{tabular}{llcccc}
+\toprule
+task & group needed & \multicolumn{4}{c}{$L=96$ accuracy by seed} \\
+\midrule
+$V_4$-coset & $S_3$ (rungs $1.000\;0.333\;0.167$) & 1.000 & 1.000 & 0.320 & 0.336 \\
+$A_4$-coset & $\mathbb{Z}_2$ (rungs $1.000\;0.500$) & 1.000 & 0.495 & 1.000 & 1.000 \\
+\bottomrule
+\end{tabular}
+\label{tab:quotient}
+\end{table}
+
+The failures sit at $0.320$ and $0.336$ against $S_3$'s rung of $1/3$, and at $0.495$ against
+$\mathbb{Z}_2$'s rung of $1/2$. A registered prediction accompanies this: a quotient task does not
+require a faithful representation, so the amplitude on $S_4$'s $3$-dimensional irreps should stay near
+zero even when the task is solved perfectly. It does --- at most $0.042$ across all eight quotient
+runs, against $\approx1.00$ on the solved full-task runs. Capacity tracks the task, not the ambient
+group.
+
+% ======================================================================================
+\section{Limitations}
+
+Small groups, small dimensions, single-layer transports, four seeds per cell, and a training
+objective that includes an explicit group-law penalty --- the law describes where this architecture
+lands when it fails, not a claim about trained networks in general. The same-order control is
+registered as falsified on one run of 28. The Frobenius--Schur account of \emph{which} rung is
+reached, present in earlier notes, is not claimed here: $\mathrm{SL}(2,3)$ solved the task outright at
+width 6, which that account does not predict.
+
+Three weaknesses are specific. The bottom rung is chance, so the four $A_5$ runs confirm the law
+without demonstrating it, and the positive evidence rests on the intermediate rungs of $Q_8$ and
+$S_4$ and on coset consistency. Clearing the abelian ceiling is shown on $S_3$ only; on larger groups
+the same transport falls below what a commuting transport achieves, so Section~\ref{sec:ceiling}
+bounds what the architecture can express and says nothing about what training reliably finds. And the
+character diagnostic is doubly conditional --- on the transport being a homomorphism, and on the
+representation being full rank --- with the predicted quotient values so far confirmed in a single
+clean instance rather than across the table.
+
+Every derived quantity above --- the ceiling, the rung sets, the attainable character norms --- is
+recomputed from the group definitions by \texttt{evidence/verify\_paperB.py}, which also re-reads the
+measured tables from the result files rather than trusting a transcription.
+
+\end{document}

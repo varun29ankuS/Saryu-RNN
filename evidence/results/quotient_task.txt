@@ -1,0 +1,28 @@
+WHEN THE CORRECT ANSWER IS A QUOTIENT
+
+  task  full: 24 classes, chance 0.042, needs faithful
+  task   V_4:  6 classes, chance 0.167, needs S_4/V_4 = S_3
+  task   A_4:  2 classes, chance 0.500, needs S_4/A_4 = Z_2
+
+  task  sd    L=12    L=96   flat  trivial     sign     2dim      std  std_sgn  max3dim
+------------------------------------------------------------------------------------------
+  full   0   1.000   1.000   True    0.989   -0.009    0.008   -0.001    1.004    1.004   (89s)
+  full   1   0.036   0.036   True    2.273   -0.037    0.115    0.313   -0.026    0.313   (80s)
+  full   2   1.000   1.000   True    0.996   -0.003   -0.000    1.002   -0.000    1.002   (70s)
+  full   3   0.083   0.081   True    2.166    0.834   -0.001    0.000   -0.000    0.000   (84s)
+  full  == 2/4 solved at L=96
+
+   V_4   0   1.000   1.000   True    1.125   -0.124    1.000   -0.041    0.042    0.042   (72s)
+   V_4   1   1.000   1.000   True    2.002    0.002    0.999   -0.001    0.000    0.000   (75s)
+   V_4   2   0.346   0.320   True    2.041    0.957    0.000   -0.041    0.041    0.041   (77s)
+   V_4   3   0.349   0.336   True    2.125    0.875   -0.001    0.041   -0.042    0.041   (67s)
+   V_4  == 2/4 solved at L=96
+
+   A_4   0   1.000   1.000   True    1.083    1.000   -0.041   -0.041    0.041    0.041   (72s)
+   A_4   1   0.520   0.495   True    2.999   -0.000    0.000   -0.001    0.000    0.000   (82s)
+   A_4   2   1.000   1.000   True    2.041    0.959    0.000   -0.039    0.042    0.042   (70s)
+   A_4   3   1.000   1.000   True    2.125    0.875   -0.001    0.041   -0.041    0.041   (72s)
+   A_4  == 3/4 solved at L=96
+
+  PREDICTION: A_4 and V_4 tasks keep max3dim ~0 (they do not need a faithful rep);
+  only the full task must acquire a 3-dim irrep. If so, capacity tracks the task.

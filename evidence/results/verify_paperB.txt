@@ -1,0 +1,88 @@
+1. THE ABELIAN CEILING  (claimed in evidence/results/v2.txt, sequence length 8)
+    group  measured claim     exact  multisets
+      Z_6          1.0000    1.0000       1287   ok
+      S_3          0.3850    0.3850       1287   ok
+
+2. THE RUNG VALUES  (claimed in archive/results/rungs.txt)
+    S_4 |G|=24  normal subgroup orders [1, 4, 12, 24]
+          rungs 1/|N| = [0.042, 0.083, 0.25, 1.0]   ok
+    Q_8 |G|= 8  normal subgroup orders [1, 2, 4, 4, 4, 8]
+          rungs 1/|N| = [0.125, 0.25, 0.5, 1.0]   ok
+    A_5 |G|=60  normal subgroup orders [1, 60]
+          rungs 1/|N| = [0.017, 1.0]   ok
+
+3. CHARACTER NORMS AT d = 4  (claimed in archive/results/charnorm.txt:
+   2.000 = faithful, 3 or 5 = kernel V_4, 8 = kernel A_4)
+   kernel order  1 (  faithful):  <chi,chi> in [2]
+   kernel order  4 (kernel V_4):  <chi,chi> in [3, 4, 5]
+   kernel order 12 (kernel A_4):  <chi,chi> in [8, 10, 16]
+   kernel order 24 (kernel S_4):  <chi,chi> in [16]
+     faithful gives 2       ok
+     ker V_4 gives 3        ok
+     ker V_4 gives 5        ok
+     ker A_4 gives 8        ok
+   values unique to a faithful rep, at FULL rank d = 4: [2]  -> 2 is diagnostic
+   but a trained transport can let a dimension die, so the honest question is what
+   <chi,chi> = 2 implies over ALL dimensions up to 4:
+     d=1: <chi,chi> = 2 is reachable with kernel (not reachable)
+     d=2: <chi,chi> = 2 is reachable with kernel ['kernel A_4']
+     d=3: <chi,chi> = 2 is reachable with kernel ['kernel V_4']
+     d=4: <chi,chi> = 2 is reachable with kernel ['faithful']
+   => across d <= 4, <chi,chi> = 2 admits kernels [1, 4, 12]: it is diagnostic
+      ONLY if the representation is known to be full rank. Reported as conditional.
+
+4. THE MEASURED ACCURACIES AGAINST THOSE RUNGS  (parsed from the result files, not
+   retyped, so the transcription is checked along with the claim)
+    Q_8 sd0  L=12 0.247  L=96 0.241  flat  True  nearest rung 0.250  dev 0.009   |ker|=8 
+    Q_8 sd1  L=12 0.498  L=96 0.521  flat  True  nearest rung 0.500  dev 0.021   |ker|=2 
+    Q_8 sd2  L=12 1.000  L=96 1.000  flat  True  nearest rung 1.000  dev 0.000   |ker|=1 
+    Q_8 sd3  L=12 0.264  L=96 0.243  flat  True  nearest rung 0.250  dev 0.007   |ker|=4 
+    S_4 sd0  L=12 1.000  L=96 1.000  flat  True  nearest rung 1.000  dev 0.000   |ker|=4 
+    S_4 sd1  L=12 0.081  L=96 0.100  flat  True  nearest rung 0.083  dev 0.017   |ker|=8 <- NOT a normal subgroup order
+    S_4 sd2  L=12 0.264  L=96 0.251  flat  True  nearest rung 0.250  dev 0.001   |ker|=12 
+    S_4 sd3  L=12 0.257  L=96 0.259  flat  True  nearest rung 0.250  dev 0.009   |ker|=24 
+    A_5 sd0  L=12 0.015  L=96 0.020  flat  True  nearest rung 0.017  dev 0.003   |ker|=30 <- NOT a normal subgroup order
+    A_5 sd1  L=12 0.009  L=96 0.021  flat  True  nearest rung 0.017  dev 0.004   |ker|=60 
+    A_5 sd2  L=12 0.018  L=96 0.014  flat  True  nearest rung 0.017  dev 0.003   |ker|=30 <- NOT a normal subgroup order
+    A_5 sd3  L=12 0.015  L=96 0.016  flat  True  nearest rung 0.017  dev 0.001   |ker|=30 <- NOT a normal subgroup order
+   worst deviation from a rung of the run's own group: 0.021 over 12 runs
+   rows whose reported |ker| is not a normal subgroup order: 4/12  <- that column is unreliable and is not used
+   registered A_5 falsifier (a flat accuracy strictly between 0.017 and 1.000): 0 hits -> not falsified
+
+5. COSET CONSISTENCY PICKS THE SAME N THE ACCURACY DOES
+   raw 1.000   smallest N with coset ~1.000: |N|= 1   predicts 1/|N|=1.000   ok
+   raw 1.000   smallest N with coset ~1.000: |N|= 1   predicts 1/|N|=1.000   ok
+   raw 0.230   smallest N with coset ~1.000: |N|= 4   predicts 1/|N|=0.250   ok
+   raw 0.081   smallest N with coset ~1.000: |N|=12   predicts 1/|N|=0.083   ok
+   raw 0.042   smallest N with coset ~1.000: |N|=24   predicts 1/|N|=0.042   ok
+   5/5 runs: the subgroup identified by the ERRORS predicts the accuracy
+
+6. THE LATTICE LAW APPLIES TO THE QUOTIENT TOO
+   On the V_4 task the target is the V_4-coset, so the group to be learned is
+   S_4/V_4 = S_3; on the A_4 task it is S_4/A_4 = Z_2. Their own rungs should then
+   govern the failures -- the law applied one level down.
+   task V_4: quotient S_3, normal subgroup orders [1, 3, 6], rungs [0.167, 0.333, 1.0]
+     measured 1.000 -> nearest quotient rung 1.000  dev 0.000   ok
+     measured 1.000 -> nearest quotient rung 1.000  dev 0.000   ok
+     measured 0.320 -> nearest quotient rung 0.333  dev 0.013   ok
+     measured 0.336 -> nearest quotient rung 0.333  dev 0.003   ok
+   task A_4: quotient Z_2, normal subgroup orders [1, 2], rungs [0.5, 1.0]
+     measured 1.000 -> nearest quotient rung 1.000  dev 0.000   ok
+     measured 0.495 -> nearest quotient rung 0.500  dev 0.005   ok
+     measured 1.000 -> nearest quotient rung 1.000  dev 0.000   ok
+     measured 1.000 -> nearest quotient rung 1.000  dev 0.000   ok
+
+7. WHY THE REPORTED |ker| COLUMN IS NOISE
+   word_problem.py estimates the kernel by clustering  M[g] = mean over random h of T(h,g).
+   T is LINEAR in h and h is zero-mean, so M[g] is a Monte-Carlo zero for every g:
+   the clustering then runs on sampling noise, which is why it returns orders that
+   are not normal subgroup orders at all.
+   ||mean_h T(h,g)|| averaged over g : 0.1079
+   mean_h ||T(h,g)||   averaged over g : 1.9012
+   ratio 0.057  -- the signal the clustering sees is
+   5.7% of the transport it is meant to measure;
+   the threshold used is 0.05 on distances scaled by sqrt(d).
+   on an UNTRAINED model, where all 24 transports are independent random draws
+   and the true kernel is trivial, the estimator reports |ker| = 8.0 (3 clusters)
+
+VERDICT: all derived numbers reproduce

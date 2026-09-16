@@ -312,10 +312,15 @@ $1.0$, because there the multiset determines the answer.
 In a small experiment with a width-64 transport, two commuting transports (a diagonal rotation and a
 single fixed Givens pairing) reached $0.388\pm0.006$ and $0.389\pm0.003$ on $S_3$ --- on the bound --- and
 $1.000$ on $\mathbb{Z}_6$; a non-commuting transport (alternating Givens pairings) reached
-$0.779\pm0.380$ on $S_3$ over three seeds, above the bound that no commuting transport can
-cross.\footnote{Repository \texttt{evidence/ceiling.py}, log \texttt{evidence/results/v2.txt}. The
-non-commuting arm there is a Givens butterfly, not Saryu's reflections; the experiment establishes the
-ceiling, not Saryu's accuracy.} Two reflections about different mirrors already fail to commute
+$0.779\pm0.380$ on $S_3$ over three seeds, above the bound that no commuting transport can cross. A
+reflection transport of the kind used here, with $n_h=4$, reaches $0.778$ on the same task, so the
+gap is not specific to the butterfly.\footnote{Repository \texttt{evidence/ceiling.py}, logs
+\texttt{evidence/results/v2.txt} and \texttt{archive/results/abelian\_ladder.txt}; the bounds
+themselves are recomputed by enumeration in \texttt{evidence/verify\_paperB.py}. Two caveats travel
+with this: the $\pm0.380$ spread means some seeds solve the task and others fall below the ceiling,
+and on larger groups ($Q_8$, $A_4$, $S_4$) the reflection transport lands \emph{below} the abelian
+ceiling. Being non-commuting removes a ceiling; it does not supply an optimiser that reaches what lies
+above it. Paper B treats where those runs land instead.} Two reflections about different mirrors already fail to commute
 (Figure~\ref{fig:order}): in the plane they compose to rotations by $+90^\circ$ and $-90^\circ$.
 
 This is the same observation that motivates negative eigenvalues~\cite{grazzi2024} and products of

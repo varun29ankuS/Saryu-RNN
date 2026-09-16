@@ -1,0 +1,23 @@
+RUNG STRUCTURE IS A PROPERTY OF THE GROUP, NOT THE MODEL
+Falsifier: a stable length-flat accuracy on A_5 strictly between 0.017 and 1.000.
+
+Q_8  |G|=8  d=4  n_h=4   predicted rungs: 1/1=1.000  1/2=0.500  1/4=0.250  1/8=0.125
+   sd    L=12    L=96  flat?  |ker|  1/|ker|  nearest rung
+    0   0.247   0.241   True    8.0    0.125         0.250   (100s)
+    1   0.498   0.521   True    2.0    0.500         0.500   (106s)
+    2   1.000   1.000   True    1.0    1.000         1.000   (65s)
+    3   0.264   0.243   True    4.0    0.250         0.250   (29s)
+
+S_4  |G|=24  d=4  n_h=4   predicted rungs: 1/1=1.000  1/4=0.250  1/12=0.083  1/24=0.042
+   sd    L=12    L=96  flat?  |ker|  1/|ker|  nearest rung
+    0   1.000   1.000   True    4.0    0.250         1.000   (30s)
+    1   0.081   0.100   True    8.0    0.125         0.083   (48s)
+    2   0.264   0.251   True   12.0    0.083         0.250   (103s)
+    3   0.257   0.259   True   24.0    0.042         0.250   (34s)
+
+A_5  |G|=60  d=5  n_h=4   predicted rungs: 1/1=1.000  1/60=0.017
+   sd    L=12    L=96  flat?  |ker|  1/|ker|  nearest rung
+    0   0.015   0.020   True   30.0    0.033         0.017   (57s)
+    1   0.009   0.021   True   60.0    0.017         0.017   (54s)
+    2   0.018   0.014   True   30.0    0.033         0.017   (49s)
+    3   0.015   0.016   True   30.0    0.033         0.017   (76s)

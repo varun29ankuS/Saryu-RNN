@@ -1,0 +1,12 @@
+THE MISSING CONTROL: do ABELIAN transports actually reach their ceiling on the ladder?
+Saryu sits BELOW the abelian ceiling on 4 of 6 groups. This tests whether that is a
+butterfly-specific defect or whether the whole setup fails on larger groups.
+
+ group  |G|   ceiling   chance   diag_rot (abelian)      Saryu
+--------------------------------------------------------------
+   Z_6    6     1.000    0.167         1.000 at ceiling      1.000
+   S_3    6     0.385    0.167         0.368 at ceiling      0.778
+   Q_8    8     0.544    0.125         0.498 at ceiling      0.374
+   A_4   12     0.286    0.083         0.243 at ceiling      0.085
+   S_4   24     0.127    0.042         0.042   BELOW      0.044
+   A_5   60     0.040    0.017         0.016 at ceiling      0.015
