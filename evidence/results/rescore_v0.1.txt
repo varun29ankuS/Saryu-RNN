@@ -1,0 +1,23 @@
+RELEASED CHECKPOINTS, RESCORED AT IDENTICAL POSITIONS
+scripts/rescore.py, run 2026-09-16 on CPU. 64 windows, last 128 characters scored, every context
+length scoring the SAME characters (windows end at fixed positions, EVAL_ANCHOR=8192). Corpus:
+enwik8, our 95/5 character split, 4,981,092 evaluation characters, vocabulary 481.
+
+                                    ctx 128   ctx 512  ctx 2048  ctx 8192
+saryu_v4b_last.pt   5,016,097 par    1.6710    1.5864    1.5864    1.5864
+saryu_25m.pt       25,183,861 par    1.5353    1.4331    1.4331    1.4331
+
+SUPERSEDED (published 2026-09-15, window starts drawn separately per length, so each column scored
+different text -- not comparable with the above or with each other):
+
+                                    ctx 128   ctx 512  ctx 2048  ctx 8192
+saryu_v4b_last.pt                     1.782     1.671     1.706     1.606
+saryu_25m.pt                          1.643     1.516     1.562     1.467
+
+NOTES
+1. Every corrected number is BETTER than the number it replaces, at every length.
+2. The columns past 512 repeat exactly because the models stop using context there; see
+   effective_context.txt for the direct measurement (state identical to six decimals, KL 0.000000).
+3. The GRU (4.9M) and transformer (5.0M) rows published alongside the old table were measured under
+   the old protocol and have no rescored counterpart: those checkpoints were not kept. They are
+   withdrawn until the comparison is rerun with several seeds under this protocol.

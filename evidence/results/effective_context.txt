@@ -1,0 +1,46 @@
+HOW MUCH CONTEXT DO THE TRAINED CHECKPOINTS ACTUALLY USE?
+evidence/effective_context.py, run 2026-09-16 on CPU. Scored text is identical at every context
+length: a window of length ctx ENDS at a fixed position and only the last 128 characters are
+scored. "KL to ref" is the mean KL between the next-character distributions given ctx characters
+and given the longest context; "state cos" is the cosine similarity of the recurrent state entering
+the scored region, overall and per layer.
+
+--- 5M checkpoint (saryu_v4b_last.pt, arm +Wg0.1, d=320) -----------------------------------------
+LENS=128,256,512,1024,2048,4096,8192 EVAL_WINDOWS=16 EVAL_ANCHOR=16384
+
+    ctx          bpc    KL to ref      state cos   per layer
+------------------------------------------------------------------------------
+    128     1.788326     4.553845              -   (no state probe)  (2s)
+    256     1.722210     0.015948       0.999525   1.000 1.000 1.000 0.998  (5s)
+    512     1.721628     0.000012       1.000000   1.000 1.000 1.000 1.000  (12s)
+   1024     1.721638    -0.000000       1.000000   1.000 1.000 1.000 1.000  (21s)
+   2048     1.721638     0.000000       1.000000   1.000 1.000 1.000 1.000  (29s)
+   4096     1.721638     0.000000       1.000000   1.000 1.000 1.000 1.000  (58s)
+   8192     1.721638            -              -   (reference)  (175s)
+
+--- 25M checkpoint (saryu_25m.pt, d=744) ---------------------------------------------------------
+LENS=128,256,512,1024 EVAL_WINDOWS=8 EVAL_ANCHOR=2048
+
+    ctx          bpc    KL to ref      state cos   per layer
+------------------------------------------------------------------------------
+    128     1.738696     8.392855              -   (no state probe)  (1s)
+    256     1.645097     0.092448       0.999111   1.000 1.000 1.000 0.996  (4s)
+    512     1.639616     0.000271       0.999996   1.000 1.000 1.000 1.000  (7s)
+   1024     1.639556            -              -   (reference)  (15s)
+
+WHAT IT SAYS
+1. Both checkpoints stop using context at about 512 characters. Past it the state entering the
+   scored region is identical to six decimals in every layer, the predictions are unchanged
+   (KL = 0.000000), and the bits per character do not move.
+2. The apparent gain from context 128 to 8192 in the published table was two artefacts stacked:
+   window starts were drawn separately per length, so each column scored different text; and at
+   ctx = 128 the scored characters have NO context in front of them at all, which is why 128 is
+   the only row that differs (KL 4.55 at 5M, 8.39 at 25M).
+3. The prediction registered in the script's docstring ("if KL and state disagreement collapse
+   beyond some length, the results table's claim has to be narrowed to that length") is therefore
+   confirmed, and the claim is being narrowed everywhere it appears.
+4. The deeper cause is in the architecture, not the evaluation: the write gate is convex, so the
+   state is a decaying mixture. The measured mean gate is 0.43 in layer 1 falling to 0.09 in
+   layer 4, and (1 - 0.09)^512 is about 1e-21, so nothing from beyond a few hundred characters
+   survives. Reaching further needs a gate that can stay near zero for a long span, or the
+   separate fact memory in experimental/memory/.

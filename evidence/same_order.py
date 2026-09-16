@@ -13,7 +13,7 @@ apart from the endpoints:
 
 Same |G|, same chance level, same vocabulary, architecture, objective and budget.
 
-History (earlier scripts, not in this repository): at n_h = 3 SL(2,3) was not expressible (every
+History: archive/experiments/sameorder{,2,3}.py. At n_h = 3 SL(2,3) was not expressible (every
 run at chance). At n_h = 8, d = 6, 1200 steps every flat failure landed on its own group's
 exclusive rungs (S_4 1 run at 0.250; SL(2,3) 4 runs at 0.500), but only 16 seeds and no
 coset check. This run doubles the steps (the budget of the other lattice runs), doubles the
@@ -41,7 +41,7 @@ a second subset can share OUT without overwriting the first).
 
 Runs, each committed before it started, all scored by the prediction above:
   results/same_order.txt              2400 steps, 16 seeds per group
-  results/same_order_1200/            1200 steps, 16 seeds per group (the earlier runs' budget)
+  results/same_order_1200/            1200 steps, 16 seeds per group (the archive budget)
   results/same_order_s4_1800/         1800 steps, S_4 only, 32 seeds. Purpose: 2400 steps gave no
                                       S_4 failures and 1200 steps gave one steady one, so the S_4
                                       side of prediction 2 rested on a single run. Result: 0 steady
@@ -50,8 +50,8 @@ Runs, each committed before it started, all scored by the prediction above:
                                       d = 6 S_4 fails by drifting, not by settling. d = 3 is the
                                       smallest width with a faithful S_4 representation and none for
                                       SL(2,3) (its 3-dim irrep has kernel Z_2), so SL(2,3) is expected
-                                      to cap at 0.500 and S_4 can fail steadily (an earlier
-                                      dimension control: S_4 at 0.258 and 0.235).
+                                      to cap at 0.500 and S_4 can fail steadily (archive
+                                      dimension_control.txt: S_4 at 0.258 and 0.235).
                                       Bug: the group list defaulted to 'S_4,SL(2,3)' split on ',',
                                       which cuts 'SL(2,3)' apart, and the GROUPS variable used to
                                       override it is reserved by bash and never reached Python. So
@@ -70,9 +70,9 @@ exists; a run that is merely bad shows up as kernel |G| with accuracy off 1/|G|.
 REFERENCES
 ----------
 Grazzi et al. 2024. Unlocking State-Tracking in Linear RNNs Through Negative Eigenvalues.
-    arXiv 2411.12537.
+    arXiv 2411.12537. literature/2024_grazzi_negative-eigenvalues-state-tracking_2411.12537.pdf
 Siems et al. 2025. DeltaProduct: Improving State-Tracking in Linear RNNs via Householder
-    Products. arXiv 2502.10297.
+    Products. arXiv 2502.10297. literature/2025_siems_deltaproduct-householder-products_2502.10297.pdf
 """
 import glob
 import itertools

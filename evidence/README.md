@@ -20,7 +20,8 @@ and run on a CPU. Result logs from when they were run are in `results/`.
 `diagnose.py`, and `benchmark.py`) with its own README. The trained model supersedes its layer.
 
 Scope: these are toy-scale results (small groups, small dimensions). The language-model results
-are in the top-level README.
+are in the top-level README. The full research history, including what was tried and retracted,
+is in `archive/`.
 
 ## References
 
