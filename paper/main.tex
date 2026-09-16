@@ -57,7 +57,7 @@ the write is convex, the state is provably bounded. The recurrence is trained wi
 chunk-parallel kernel (an inverse-free triangular solve per chunk) and generates at a per-token cost
 independent of context length. This draft describes the architecture, the kernel, the design
 reasoning and the two models trained so far (5M and 25M parameters, character-level enwik8, trained
-at context 128 and evaluated up to context 8192). It reports only Saryu's own measurements;
+at context 128, and measured to use about 512 characters of context and no more). It reports only Saryu's own measurements;
 matched comparisons against other architectures are the subject of the next version.
 \end{abstract}
 
@@ -492,11 +492,13 @@ the value embedding and the training recipe.}
 \label{tab:config}
 \end{table}
 
-\paragraph{Evaluation.} To see how the model uses context longer than it was trained on, each number
-below is measured with the model reading a window of $L\in\{128,512,2048,8192\}$ characters and scoring
-only the \emph{last 128} characters of the window, over 64 windows drawn at random from the evaluation
-text (8,192 scored characters per number). The windows are drawn afresh for each $L$, so neighbouring
-columns score different characters. The unit is bits per character (bpc); lower is better.
+\paragraph{Evaluation.} Each number below is measured with the model reading a window of
+$L\in\{128,512,2048,8192\}$ characters and scoring only the \emph{last 128} characters of the window,
+over 64 windows drawn at random from the evaluation text (8,192 scored characters per number). Every
+window \emph{ends} at the same 64 positions, so each context length scores exactly the same characters
+with more or less text in front of them. (An earlier version of this draft drew the window starts
+separately for each $L$; its columns scored different characters and were not comparable to each
+other.) The unit is bits per character (bpc); lower is better.
 
 \subsection{Results}
 
@@ -509,14 +511,13 @@ columns score different characters. The unit is bits per character (bpc); lower 
 \cmidrule(l){2-5}
 model & 128 & 512 & 2048 & 8192 \\
 \midrule
-Saryu 5M (checkpoint shipped with the code) & 1.782 & 1.671 & 1.706 & 1.606 \\
-Saryu 5M, base recipe, three seeds & 1.782--1.793 & 1.671--1.681 & 1.706--1.730 & 1.604--1.618 \\
-Saryu 25M & \textbf{1.643} & \textbf{1.516} & \textbf{1.562} & \textbf{1.467} \\
+Saryu 5M (checkpoint shipped with the code) & 1.671 & 1.586 & 1.586 & 1.586 \\
+Saryu 25M & \textbf{1.535} & \textbf{1.433} & \textbf{1.433} & \textbf{1.433} \\
 \bottomrule
 \end{tabular}
-\caption{Character-level results on our enwik8 split. Every model was trained at context 128. The
-three-seed row (base 5M recipe without the value embedding and learning-rate multipliers) shows the
-seed-to-seed spread.}
+\caption{Character-level results on our enwik8 split, scoring identical text at every context length.
+Both models were trained at context 128. The columns beyond 512 repeat because the models stop using
+context there (Section~\ref{sec:context}).}
 \label{tab:bpc}
 \end{table}
 
@@ -526,15 +527,12 @@ seed-to-seed spread.}
 \begin{semilogxaxis}[width=7.4cm, height=5.0cm, log basis x=2,
   xtick={128,512,2048,8192}, xticklabels={128,512,2048,8192},
   xlabel={context length read (trained at 128)}, ylabel={bpc on the last 128 characters},
-  ymin=1.42, ymax=1.92, legend style={font=\scriptsize, draw=none, fill=none}, legend pos=north east,
+  ymin=1.39, ymax=1.75, legend style={font=\scriptsize, draw=none, fill=none}, legend pos=north east,
   tick label style={font=\scriptsize}, label style={font=\small}]
-  \addplot[thick, mark=square*, accB] coordinates {(128,1.643) (512,1.516) (2048,1.562) (8192,1.467)};
+  \addplot[thick, mark=square*, accB] coordinates {(128,1.535) (512,1.433) (2048,1.433) (8192,1.433)};
   \addlegendentry{Saryu 25M}
-  \addplot[thick, mark=*, accA] coordinates {(128,1.782) (512,1.671) (2048,1.706) (8192,1.606)};
+  \addplot[thick, mark=*, accA] coordinates {(128,1.671) (512,1.586) (2048,1.586) (8192,1.586)};
   \addlegendentry{Saryu 5M}
-  \addplot[name path=hi, draw=none, forget plot] coordinates {(128,1.793) (512,1.681) (2048,1.730) (8192,1.618)};
-  \addplot[name path=lo, draw=none, forget plot] coordinates {(128,1.782) (512,1.671) (2048,1.706) (8192,1.604)};
-  \addplot[accA!25, forget plot] fill between[of=hi and lo];
 \end{semilogxaxis}
 \end{tikzpicture}\hfill
 \begin{tikzpicture}
@@ -550,8 +548,8 @@ seed-to-seed spread.}
   \addlegendentry{fraction with $\beta>1.99$}
 \end{axis}
 \end{tikzpicture}
-\caption{\textbf{Left:} bits per character as the model reads longer context than it was trained on;
-the shaded band is the three-seed spread of the 5M base recipe. \textbf{Right:} what the 25M model's
+\caption{\textbf{Left:} bits per character against the context read, scoring identical text at every
+length: both models flatten at 512 characters and never improve again. \textbf{Right:} what the 25M model's
 transports do on evaluation text (four windows of 1,024 characters): lower layers are close to exact
 reflections and rewrite often, the top layer uses softer transforms and rewrites rarely.}
 \label{fig:results}
@@ -561,18 +559,49 @@ Table~\ref{tab:bpc} and Figure~\ref{fig:results} (left) give the numbers. Three 
 with the caution that this is a single corpus and small models:
 
 \begin{itemize}[leftmargin=*,itemsep=2pt]
-  \item \textbf{Longer context helps although it was never trained on.} Both models score the last 128
-        characters of a window better when the window is 8,192 characters long than when it is 128
-        long ($1.643\to1.467$ bpc at 25M). A recurrent state has no position embedding to fall off the end of,
-        and the bound of Proposition~\ref{prop:bounded} keeps the state in range at any length.
-  \item \textbf{The curve is not monotone.} Context 2048 scores worse than 512 for both models and for
-        every seed. Because the windows differ between columns, part of this can be sampling (8,192 scored
-        characters per number); whether some of it is real is open and is on the list for the next
-        version, which will score identical characters across lengths.
-  \item \textbf{Scale helps at every length.} Five times the parameters and twice the training
-        characters lower bpc by $0.14$--$0.16$ at every context length; the seed spread at 5M is about
-        $0.01$--$0.02$.
+  \item \textbf{The models use about 512 characters of context and nothing before that.} Past 512 the
+        state entering the scored text matches the long-context state to six decimals in every layer,
+        the next-character distributions are unchanged ($\mathrm{KL}=0.000000$), and bpc stops moving
+        (Section~\ref{sec:context}).
+  \item \textbf{Context 128 is the only row that differs, for a mechanical reason.} At $L=128$ the
+        scored characters have no context at all in front of them; the KL against the long-context
+        predictions is $4.55$ at 5M and $8.39$ at 25M.
+  \item \textbf{Scale helps.} Five times the parameters and twice the training characters lower bpc by
+        about $0.15$ at every context length.
 \end{itemize}
+
+An earlier version of this draft reported $1.643\to1.467$ bpc from context 128 to 8192 at 25M and read
+it as the model using context it was never trained on. Those numbers came from windows drawn separately
+per length, so each column scored different text; the effect does not survive scoring identical text,
+and the claim is withdrawn.
+
+\subsection{How much context is used}
+\label{sec:context}
+
+Table~\ref{tab:bpc} flattens at 512, which could mean either that the extra text carries nothing or
+that the model cannot see it. \texttt{evidence/effective\_context.py} separates the two by comparing,
+at identical scored positions, the predictions and the recurrent state under context $L$ against the
+longest context:
+
+\begin{center}\small
+\begin{tabular}{@{}rccc@{}}
+\toprule
+context & bpc & KL to 8192 & state cosine \\
+\midrule
+128 & 1.788326 & 4.553845 & --- \\
+256 & 1.722210 & 0.015948 & 0.999525 \\
+512 & 1.721628 & 0.000012 & 1.000000 \\
+1024--8192 & 1.721638 & 0.000000 & 1.000000 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+(5M checkpoint, 16 windows; the 25M behaves the same, its 512-context state matching the 1024-context
+state to $0.999996$.) Past 512 characters the state is not merely uninformative --- it is identical, so
+the model cannot be using anything earlier. This follows from the architecture: the write is convex, so
+the state is a decaying mixture, and with the measured mean gate of $0.09$ in the top layer,
+$(1-0.09)^{512}\approx10^{-21}$. Reaching further needs a gate able to stay near zero for long spans, or
+the separate fact memory of Section~\ref{sec:next}.
 
 \subsection{What the transports learned}
 
@@ -593,8 +622,8 @@ collapsing to one regime.
 \paragraph{Comparisons.} This draft deliberately reports no comparison. The next version will compare
 Saryu with other architectures at matched parameters and training data --- a gated recurrent network
 with the same block around it, matrix-state delta-rule models~\cite{yang2024delta,yang2024gated,siems2025}
-and a transformer --- with several seeds, a second corpus, identical scored characters across context
-lengths, state-tracking tasks, and throughput. The design questions above (Section~\ref{sec:why}) are
+and a transformer --- with several seeds, a second corpus,
+state-tracking tasks, and throughput. The design questions above (Section~\ref{sec:why}) are
 only settled once those numbers exist.
 
 \paragraph{A fused kernel.} The chunkwise kernel is exact but written in plain PyTorch with a loop over

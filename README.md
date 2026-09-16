@@ -87,18 +87,22 @@ Every model was trained at context 128. Lower is better.
 
 | model | params | train steps | ctx 128 | ctx 512 | ctx 2048 | ctx 8192 |
 |---|---|---|---|---|---|---|
-| **Saryu 25M** | 25.2M | 10,000 | **1.643** | **1.516** | **1.562** | **1.467** |
-| Saryu 5M (released checkpoint, value embedding) | 5.0M | 5,000 | 1.782 | 1.671 | 1.706 | 1.606 |
-| Saryu 5M (base recipe, seed 0) | 5.1M | 5,000 | 1.787 | 1.671 | 1.708 | 1.607 |
-| GRU, same block anatomy, 5M | 4.9M | 5,000 | 1.811 | 1.679 | 1.726 | 1.633 |
-| Transformer, 5M | 5.0M | 12,000 | 1.740 | 5.569 | 5.531 | 5.509 |
+| **Saryu 25M** | 25.2M | 10,000 | **1.535** | **1.433** | **1.433** | **1.433** |
+| Saryu 5M (released checkpoint, value embedding) | 5.0M | 5,000 | 1.671 | 1.586 | 1.586 | 1.586 |
 
 Reading it honestly:
-- Saryu scores better with context it was never trained on (128 → 8192 improves every model size).
-- At 5M a GRU in the identical block is close behind (the Saryu run in that same head-to-head, a
-  different seed, is 1.793 / 1.681 / 1.730 / 1.618). The transport is not yet a clear win over a
-  strong recurrent baseline; matched comparisons at larger scale are the next step.
-- The transformer is better at its training length and cannot extrapolate past it.
+- **The model reads about 512 characters and no more.** Past that the recurrent state entering the
+  scored text is identical to six decimals in every layer and the predictions do not change
+  ([`evidence/results/effective_context.txt`](evidence/results/effective_context.txt)). Context 128
+  is worse only because the scored characters then have nothing in front of them.
+- An earlier version of this table claimed the model kept improving out to context 8192. That was
+  an artefact of drawing window positions separately per length, so each column scored different
+  text. These numbers score identical text at every length; they are better than the old ones
+  everywhere, over a much shorter span than was claimed.
+- Scale helps: 25M beats 5M by about 0.15 bpc at every length.
+- **Superseded:** the GRU and transformer rows published here earlier used the old evaluation and
+  are not comparable with these numbers. They will be rerun, with several seeds, before any
+  comparison is quoted again.
 - These are small models on one corpus, with our own 95/5 character split, so they are not
   comparable with published enwik8 numbers and say nothing yet about LLM scale.
 

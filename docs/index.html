@@ -133,7 +133,7 @@ footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-bet
   </div>
   <div class="stats">
     <div class="stat"><b>11,904</b><span>numbers of state for the whole 25M model, at any context length</span></div>
-    <div class="stat"><b>1.467 bpc</b><span>at 8,192 characters of context — trained only at 128</span></div>
+    <div class="stat"><b>1.433 bpc</b><span>on enwik8 characters, at the 512-character context the 25M model actually uses</span></div>
     <div class="stat"><b>4.8 × 10⁻⁷</b><span>largest gap between the parallel kernel and the step-by-step recurrence</span></div>
   </div>
 </div></header>
@@ -212,20 +212,18 @@ g_t = ½ (1 − cos φ_t) ≤ 0.9</div>
   <div class="tablewrap"><table>
     <thead><tr><th>model</th><th>params</th><th>steps</th><th>ctx 128</th><th>ctx 512</th><th>ctx 2048</th><th>ctx 8192</th></tr></thead>
     <tbody>
-      <tr class="hl"><td>Saryu 25M</td><td>25.2M</td><td>10,000</td><td>1.643</td><td>1.516</td><td>1.562</td><td>1.467</td></tr>
-      <tr><td>Saryu 5M (released checkpoint)</td><td>5.0M</td><td>5,000</td><td>1.782</td><td>1.671</td><td>1.706</td><td>1.606</td></tr>
-      <tr><td>Saryu 5M (base recipe, seed 0)</td><td>5.1M</td><td>5,000</td><td>1.787</td><td>1.671</td><td>1.708</td><td>1.607</td></tr>
-      <tr><td>GRU, same block, 5M</td><td>4.9M</td><td>5,000</td><td>1.811</td><td>1.679</td><td>1.726</td><td>1.633</td></tr>
-      <tr><td>Transformer, 5M</td><td>5.0M</td><td>12,000</td><td>1.740</td><td>5.569</td><td>5.531</td><td>5.509</td></tr>
+      <tr class="hl"><td>Saryu 25M</td><td>25.2M</td><td>10,000</td><td>1.535</td><td>1.433</td><td>1.433</td><td>1.433</td></tr>
+      <tr><td>Saryu 5M (released checkpoint)</td><td>5.0M</td><td>5,000</td><td>1.671</td><td>1.586</td><td>1.586</td><td>1.586</td></tr>
     </tbody>
   </table></div>
   <div class="charts">
-    <div class="card chart"><h3>Longer context helps, though it was never trained on</h3><svg id="chartCtx" viewBox="0 0 460 280"></svg><p>Trained at 128, scored with up to 8,192 characters read.</p></div>
+    <div class="card chart"><h3>The model reads about 512 characters, then stops</h3><svg id="chartCtx" viewBox="0 0 460 280"></svg><p>Identical text scored at every length. Past 512 the state is unchanged to six decimals, so the curve is flat.</p></div>
     <div class="card chart"><h3>What the 25M model's transports learned</h3><svg id="chartLayers" viewBox="0 0 460 280"></svg><p>Low layers: near-exact reflections, frequent rewrites. Top layer: soft contractions, long memory.</p></div>
   </div>
   <ul class="honest">
-    <li>At 5M a GRU in the identical block is close behind. The transport is not yet a clear win over a strong recurrent baseline; matched comparisons at larger scale come next.</li>
-    <li>The transformer is better at its training length and cannot extrapolate past it.</li>
+    <li><b>The model reads about 512 characters and no more.</b> Past that, the state entering the scored text is identical to six decimals in every layer and the predictions do not change at all.</li>
+    <li>An earlier version of this page said the model kept improving out to 8,192 characters. That came from drawing window positions separately for each length, so every column scored different text. Scoring identical text removes the effect — and makes each number better than the one it replaces.</li>
+    <li>The GRU and transformer comparisons shown here earlier used that superseded evaluation. They are removed until they are rerun.</li>
     <li>Small models, one corpus, our own 95/5 character split — not comparable with published enwik8 numbers, and no evidence yet about LLM scale.</li>
   </ul>
 </div></section>
@@ -350,9 +348,9 @@ python scripts/serve.py                                 <span class="cmt"># web 
   }
   function charts(){
     chart('chartCtx', [128,512,2048,8192], ['128','512','2048','8192'],
-      [{name:'Saryu 25M', y:[1.643,1.516,1.562,1.467], color:'--red'},
-       {name:'Saryu 5M', y:[1.782,1.671,1.706,1.606], color:'--blue'}],
-      1.40, 1.90, [1.4,1.5,1.6,1.7,1.8,1.9], 'context length read', 'bits per character');
+      [{name:'Saryu 25M', y:[1.535,1.433,1.433,1.433], color:'--red'},
+       {name:'Saryu 5M', y:[1.671,1.586,1.586,1.586], color:'--blue'}],
+      1.39, 1.75, [1.4,1.5,1.6,1.7], 'context length read', 'bits per character');
     chart('chartLayers', [0,1,2,3], ['layer 1','layer 2','layer 3','layer 4'],
       [{name:'mean β (2 = reflection)', y:[1.811,1.782,1.543,0.984], color:'--red'},
        {name:'mean gate g (1 = overwrite)', y:[0.433,0.294,0.185,0.093], color:'--river2'},
