@@ -117,6 +117,7 @@ def run(kind, args, seqlen, label):
     sch = torch.optim.lr_scheduler.OneCycleLR(opt, 1e-3, total_steps=STEPS, pct_start=0.1)
     rng = np.random.default_rng(1000 + SEED)
     t0 = time.time()
+    every = max(1, STEPS // 8)
     for s in range(STEPS):
         arg = args[s % len(args)]                 # interleave, so one model sees every distance
         x, y, _ = batch(rng, kind, arg, seqlen)
@@ -124,6 +125,10 @@ def run(kind, args, seqlen, label):
         opt.zero_grad(); loss.backward()
         torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)
         opt.step(); sch.step()
+        if (s + 1) % every == 0:                  # without this the run is silent until an arm ends,
+            el = time.time() - t0                 # which made a slow run look like a hung one
+            print(f'    {label} {s+1:>5}/{STEPS}  loss {float(loss):.3f}  {el:.0f}s elapsed, '
+                  f'{el/(s+1)*(STEPS-s-1):.0f}s left', flush=True)
     m.eval()
     out = []
     ev = np.random.default_rng(99)

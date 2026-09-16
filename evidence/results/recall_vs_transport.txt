@@ -1,0 +1,42 @@
+THE VECTOR STATE COMPOSES PERFECTLY AND STORES NOTHING
+evidence/recall_distance.py, 2026-09-16, CPU. Same model for both tasks: d=128, 2 layers, 8 heads,
+2 reflections, AdamW 1e-3 one-cycle, 800 steps, batch 16, seed 0. Chance on both tasks is 1/64 =
+0.0156. Prediction registered in the script's docstring before running.
+
+  RECALL (make_recall): k1 v1 k2 v2 k3 v3 k4 v4, GAP filler tokens, SEP k_i -> v_i.
+     The gap is swept independently of the number of pairs, so DISTANCE moves while LOAD does not.
+  TRANSPORT (make_transport, ordered): relations arrive in path order, so the model composes as it
+     reads and needs no storage. This is what a vector state is FOR, and it is the control.
+
+  arm                        recall @ gap 16 / 32 / 64 / 128     transport @ length 4 / 16 / 48
+  base                        0.008  0.023  0.008  0.016          1.000  1.000  1.000
+  ceiling                     0.008  0.023  0.016  0.008          1.000  1.000  1.000
+  ceiling + write scale       0.016  0.039  0.016  0.023          0.992  0.992  0.992
+
+RESULT: a total dissociation.
+1. Transport is SOLVED at every length, flat out to distance ~144 tokens. The recurrence carries
+   information forward perfectly; nothing here is a memory-decay problem.
+2. Recall is AT CHANCE at every gap in every arm -- including a gap of 16 tokens, where the queried
+   value is about 21 tokens from the query. This is not degradation with distance. There is no
+   storage at any distance.
+3. The gate options changed nothing (0.008-0.039 across all arms and gaps, all at chance). That is
+   consistent with the four gate experiments: retention was never the missing piece, because nothing
+   was being retained.
+
+WHY THIS IS THE EXPECTED ANSWER, NOT A BUG. Each token contributes an OPERATOR (u, beta -> a
+Householder pair), not a value. The state is the composition of everything read -- a coordinate
+reached by applying a sequence of isometries -- so there is no slot an item can be written to and
+later addressed. Composition is exactly what transport measures, and it is perfect. Haller et al.
+2025 (2504.14366) report the same shape of result across seven linearized architectures: additive
+update rules saturate irreversibly, and only gated delta-rule writes keep retrieval precision.
+
+WHAT IT MEANS FOR THE DESIGN. The missing capability is ADDRESSABLE STORAGE, which a matrix memory
+provides and a vector state structurally cannot. It also refines what the memory needs from the
+tracker: not longer retention, but a STABLE ADDRESS. The earlier attempt bound the memory's address
+to the tracked state and recall fell 0.793 -> 0.035, because the address drifts with every token.
+The hard ceiling from the gate work supplies slow heads (retention pinned at 877-10078 tokens) whose
+frame barely moves, which is the address the memory needed.
+
+CAVEATS. 2 layers, d=128, 800 steps, one seed, one task family. A stronger recall baseline (more
+steps, more capacity) might lift recall off chance; what would not change is the contrast, since
+transport is already saturated at 1.000 under the identical budget.
