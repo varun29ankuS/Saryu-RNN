@@ -3,153 +3,187 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
 <title>Saryu — a recurrent language model carried by reflections</title>
 <meta name="description" content="Saryu is a recurrent language model whose state is moved by input-dependent Householder reflections: order-sensitive, provably bounded, constant memory per token, trained with an exact chunk-parallel kernel.">
 <meta property="og:title" content="Saryu">
 <meta property="og:description" content="A recurrent language model whose state is moved by Householder reflections.">
-<meta property="og:url" content="https://varun29ankuS.github.io/saryu/">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230c4a5a'/%3E%3Cpath d='M12 40c8-14 16-14 20 0s12 14 20 0' stroke='%23f2b35b' stroke-width='5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta property="og:url" content="https://varun29ankus.github.io/saryu/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 96 96'%3E%3Ccircle cx='48' cy='38' r='16' fill='%23e08a1e'/%3E%3Cg stroke='%23e08a1e' stroke-width='5' stroke-linecap='round'%3E%3Cline x1='48' y1='6' x2='48' y2='15'/%3E%3Cline x1='16' y1='38' x2='25' y2='38'/%3E%3Cline x1='80' y1='38' x2='71' y2='38'/%3E%3C/g%3E%3Cpath d='M8 70 C 24 58, 34 82, 48 70 S 72 58, 88 70' stroke='%230f6d82' stroke-width='9' fill='none' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,650&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#f7f5f0; --bg2:#efece4; --card:#ffffff; --ink:#15212a; --muted:#5b6770; --line:#dcd7cb;
-  --river:#0c4a5a; --river2:#1b7286; --sun:#d98a1e; --sunsoft:#f2b35b; --blue:#2e75b6; --red:#c0392b;
-  --code:#10222b; --codeink:#e6eef1;
+  color-scheme: light;
+  --bg:#fbf8f2; --bg2:#f4ecdf; --card:#ffffff; --ink:#16242c; --ink2:#2e4049; --muted:#5f6d75;
+  --line:#e7ddcc; --line2:#f0e7d8;
+  --river:#0f6d82; --river2:#12849c; --sun:#e08a1e; --sun2:#f6c45c;
+  --accA:#1f6f8b; --accB:#c0562b;
+  --code:#14313a; --codeink:#e8f1f3;
+  --shadow:0 1px 2px rgba(22,36,44,.04), 0 8px 24px rgba(22,36,44,.06);
   --serif:"Fraunces", Georgia, "Times New Roman", serif;
   --sans:"Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Consolas, monospace;
 }
-@media (prefers-color-scheme: dark){
-  :root{ --bg:#0d1418; --bg2:#121c21; --card:#16232a; --ink:#e7eef0; --muted:#9aa9b0; --line:#26363e;
-    --river:#5fb6c8; --river2:#86cfdd; --sun:#f2b35b; --sunsoft:#f2b35b; --blue:#6fa8dc; --red:#ef7b6d;
-    --code:#0a1115; --codeink:#dce7ea; }
-}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
-body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
-a{color:var(--river2)} a:hover{color:var(--sun)}
-.wrap{max-width:1080px;margin:0 auto;padding-inline:20px}
-nav{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
-nav .wrap{display:flex;align-items:center;gap:22px;height:58px;overflow-x:auto;white-space:nowrap}
-nav .brand{font:650 20px var(--serif);color:var(--ink);text-decoration:none;margin-right:auto}
-nav a.l{color:var(--muted);text-decoration:none;font-size:14px} nav a.l:hover{color:var(--ink)}
-header.hero{padding-block:72px 40px;position:relative;overflow:hidden}
-.hero h1{font:650 clamp(52px,9vw,96px)/1 var(--serif);margin:0 0 14px;letter-spacing:-.02em}
-.hero p.lead{font-size:clamp(19px,2.4vw,24px);max-width:720px;margin:0 0 28px;color:var(--ink)}
-.hero p.lead em{font-style:normal;color:var(--river2);font-weight:600}
-.btns{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:40px}
-.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;border:1px solid var(--line);color:var(--ink);background:var(--card)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.68 var(--sans);-webkit-font-smoothing:antialiased}
+a{color:var(--river);text-underline-offset:3px} a:hover{color:var(--sun)}
+.wrap{max-width:1060px;margin:0 auto;padding-inline:22px}
+
+/* nav */
+nav{position:sticky;top:0;z-index:20;background:rgba(251,248,242,.9);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;gap:20px;height:62px;overflow-x:auto;white-space:nowrap}
+nav .brand{display:flex;align-items:center;gap:10px;margin-right:auto;text-decoration:none}
+nav .brand span{font:700 21px var(--serif);color:var(--ink);letter-spacing:-.01em}
+nav a.l{color:var(--muted);text-decoration:none;font-size:14.5px;font-weight:500} nav a.l:hover{color:var(--river)}
+nav a.cta{color:#fff;background:var(--river);padding:7px 14px;border-radius:8px}
+nav a.cta:hover{background:var(--river2);color:#fff}
+
+/* hero */
+header.hero{position:relative;overflow:hidden;padding-block:64px 44px;
+  background:radial-gradient(1100px 380px at 78% -8%, #fdf0d8 0%, rgba(253,240,216,0) 62%), var(--bg)}
+.heroGrid{display:grid;grid-template-columns:auto 1fr;gap:26px;align-items:start}
+@media (max-width:720px){.heroGrid{grid-template-columns:1fr;gap:14px}}
+.mark{width:104px;height:104px;flex:none}
+.hero h1{font:700 clamp(50px,8.5vw,88px)/1 var(--serif);margin:0 0 12px;letter-spacing:-.025em}
+.hero .etym{font:500 14.5px var(--sans);color:var(--sun);margin:0 0 14px;letter-spacing:.01em}
+.hero p.lead{font-size:clamp(18px,2.2vw,23px);line-height:1.5;max-width:700px;margin:0 0 26px;color:var(--ink2)}
+.hero p.lead b{color:var(--river);font-weight:600}
+.btns{display:flex;flex-wrap:wrap;gap:11px;margin-bottom:38px}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:11px 18px;border-radius:10px;text-decoration:none;
+  font-weight:600;font-size:15px;border:1px solid var(--line);color:var(--ink);background:var(--card);box-shadow:var(--shadow)}
 .btn.primary{background:var(--river);border-color:var(--river);color:#fff}
-@media (prefers-color-scheme: dark){.btn.primary{color:#07161b}}
-.btn:hover{transform:translateY(-1px);color:inherit}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
-.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
-.stat b{display:block;font:650 30px/1.1 var(--serif);color:var(--river)}
-.stat span{color:var(--muted);font-size:14px}
-.wave{position:absolute;right:-60px;top:30px;width:520px;opacity:.14;pointer-events:none}
-section{padding-block:56px;border-top:1px solid var(--line)}
-section h2{font:650 clamp(30px,4vw,40px)/1.15 var(--serif);margin:0 0 10px;letter-spacing:-.01em}
-section .kicker{font:500 13px var(--mono);color:var(--sun);text-transform:uppercase;letter-spacing:.12em;margin-bottom:8px}
-section p.sub{color:var(--muted);max-width:760px;margin:0 0 28px}
-.eq{font:15px/1.7 var(--mono);background:var(--code);color:var(--codeink);border-radius:12px;padding:16px 20px;overflow-x:auto;white-space:pre}
-.grid2{display:grid;grid-template-columns:1.1fr .9fr;gap:28px;align-items:start}
-@media (max-width:860px){.grid2{grid-template-columns:1fr}}
-.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px}
+.btn.primary:hover{background:var(--river2);color:#fff}
+.btn:hover{border-color:var(--river2);color:var(--river)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:14px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow)}
+.stat b{display:block;font:600 29px/1.15 var(--serif);color:var(--river)}
+.stat span{color:var(--muted);font-size:13.8px}
+
+/* sections */
+section{padding-block:60px;border-top:1px solid var(--line)}
+section h2{font:600 clamp(29px,3.8vw,38px)/1.16 var(--serif);margin:0 0 10px;letter-spacing:-.015em}
+section .kicker{font:500 12.5px var(--mono);color:var(--sun);text-transform:uppercase;letter-spacing:.14em;margin-bottom:9px}
+section p.sub{color:var(--muted);max-width:740px;margin:0 0 28px}
+.eq{font:14.5px/1.75 var(--mono);background:var(--code);color:var(--codeink);border-radius:12px;padding:16px 20px;overflow-x:auto;white-space:pre}
+.grid2{display:grid;grid-template-columns:1.05fr .95fr;gap:26px;align-items:start}
+@media (max-width:880px){.grid2{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:var(--shadow)}
+
 /* demo */
 #demo svg{width:100%;height:auto;display:block;touch-action:none}
 .controls{display:grid;gap:14px;margin-top:14px}
 .controls label{display:flex;justify-content:space-between;font-size:14px;color:var(--muted)}
 .controls output{font:500 14px var(--mono);color:var(--ink)}
-input[type=range]{width:100%;accent-color:var(--river2)}
-.readout{font:14px/1.7 var(--mono);color:var(--muted);margin-top:10px}
+input[type=range]{width:100%;accent-color:var(--river)}
+.readout{font:13.5px/1.75 var(--mono);color:var(--muted);margin-top:8px}
 .readout b{color:var(--ink);font-weight:500}
-.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);margin-top:8px}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:13px;color:var(--muted);margin-top:10px}
 .sw{display:inline-block;width:18px;height:3px;border-radius:2px;vertical-align:middle;margin-right:6px}
+
 /* pipeline */
-.pipe{display:flex;flex-direction:column;align-items:center;gap:0}
-.stage{width:min(100%,560px);text-align:center;padding:10px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:15px}
+.pipe{display:flex;flex-direction:column;align-items:center}
+.stage{width:min(100%,560px);text-align:center;padding:11px 14px;border-radius:10px;border:1px solid var(--line);background:var(--card);font-size:15px;box-shadow:var(--shadow)}
 .stage small{display:block;color:var(--muted);font-size:12.5px}
-.stage.norm{background:var(--bg2)} .stage.rec{background:color-mix(in srgb,var(--sunsoft) 30%,var(--card));border-color:color-mix(in srgb,var(--sun) 50%,var(--line));font-weight:600}
+.stage.norm{background:var(--bg2);box-shadow:none}
+.stage.rec{background:linear-gradient(180deg,#fdf1dc,#fbe8c8);border-color:#eccf96;font-weight:600}
 .arrow{width:2px;height:18px;background:var(--line);position:relative}
 .arrow:after{content:"";position:absolute;left:-4px;bottom:-2px;border:5px solid transparent;border-top-color:var(--line)}
 .proj{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:min(100%,720px)}
-@media (max-width:620px){.proj{grid-template-columns:repeat(2,1fr)}}
-.proj .stage{width:auto;background:color-mix(in srgb,var(--river2) 12%,var(--card));font:13px/1.4 var(--mono)}
+@media (max-width:640px){.proj{grid-template-columns:repeat(2,1fr)}}
+.proj .stage{width:auto;background:#eef6f8;border-color:#cfe4ea;font:13px/1.45 var(--mono);box-shadow:none}
+
 /* why */
-.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
-.why .card h3{font:600 18px/1.3 var(--sans);margin:0 0 8px}
-.why .card h3 span{color:var(--sun);font:500 13px var(--mono);display:block;margin-bottom:4px}
-.why .card p{margin:0 0 10px;color:var(--ink);font-size:15px}
-.why .card a.ev{font:500 13px var(--mono);text-decoration:none}
+.why{display:grid;grid-template-columns:repeat(auto-fit,minmax(295px,1fr));gap:16px}
+.why .card h3{font:600 17.5px/1.32 var(--sans);margin:0 0 8px}
+.why .card h3 span{color:var(--sun);font:500 12.5px var(--mono);display:block;margin-bottom:5px}
+.why .card p{margin:0 0 10px;color:var(--ink2);font-size:14.8px}
+.why .card a.ev{font:500 12.8px var(--mono);text-decoration:none}
+
 /* results */
-.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card)}
-table{border-collapse:collapse;width:100%;min-width:640px;font-size:15px}
-th,td{padding:10px 14px;text-align:right;border-bottom:1px solid var(--line)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:14px;background:var(--card);box-shadow:var(--shadow)}
+table{border-collapse:collapse;width:100%;min-width:620px;font-size:15px}
+th,td{padding:11px 15px;text-align:right;border-bottom:1px solid var(--line2)}
 th:first-child,td:first-child{text-align:left}
-thead th{font:500 13px var(--mono);color:var(--muted);background:var(--bg2)}
+thead th{font:500 12.5px var(--mono);color:var(--muted);background:var(--bg2)}
 tr.hl td{font-weight:600;color:var(--river)}
 tr:last-child td{border-bottom:0}
 .charts{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-top:22px}
-@media (max-width:860px){.charts{grid-template-columns:1fr}}
+@media (max-width:880px){.charts{grid-template-columns:1fr}}
 .chart svg{width:100%;height:auto;display:block}
 .chart h3{font:600 15px var(--sans);margin:0 0 6px}
-.chart p{font-size:13.5px;color:var(--muted);margin:6px 0 0}
-ul.honest{padding-left:20px;margin:20px 0 0} ul.honest li{margin-bottom:6px}
+.chart p{font-size:13.2px;color:var(--muted);margin:8px 0 0}
+ul.honest{padding-left:20px;margin:22px 0 0;color:var(--ink2)} ul.honest li{margin-bottom:8px}
+
 /* code */
-pre.code{position:relative;font:14px/1.6 var(--mono);background:var(--code);color:var(--codeink);border-radius:12px;padding:16px 18px;overflow-x:auto;margin:0 0 14px}
-button.copy{position:absolute;top:8px;right:8px;font:500 12px var(--sans);background:transparent;color:var(--codeink);border:1px solid #3a525c;border-radius:7px;padding:4px 9px;cursor:pointer;opacity:.8}
-button.copy:hover{opacity:1}
-.cmt{color:#8fb3bd}
-.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
-.status .card b{display:block;font:500 13px var(--mono);text-transform:uppercase;letter-spacing:.1em;margin-bottom:6px}
-.ok b{color:#2f9e6a} .next b{color:var(--sun)} .plan b{color:var(--muted)}
-footer{border-top:1px solid var(--line);padding-block:36px;color:var(--muted);font-size:14px}
-footer .wrap{display:flex;flex-wrap:wrap;gap:12px 28px;justify-content:space-between}
+pre.code{position:relative;font:13.8px/1.65 var(--mono);background:var(--code);color:var(--codeink);border-radius:12px;padding:16px 18px;overflow-x:auto;margin:0 0 14px}
+button.copy{position:absolute;top:8px;right:8px;font:500 12px var(--sans);background:transparent;color:var(--codeink);border:1px solid #47707c;border-radius:7px;padding:4px 9px;cursor:pointer;opacity:.85}
+button.copy:hover{opacity:1;border-color:var(--sun2)}
+.cmt{color:#93b8c2}
+.status{display:grid;grid-template-columns:repeat(auto-fit,minmax(235px,1fr));gap:14px}
+.status .card b{display:block;font:500 12.5px var(--mono);text-transform:uppercase;letter-spacing:.12em;margin-bottom:6px}
+.ok b{color:#1f8a5b} .next b{color:var(--sun)} .plan b{color:var(--muted)}
+footer{border-top:1px solid var(--line);padding-block:34px;color:var(--muted);font-size:14px;background:var(--bg2)}
+footer .wrap{display:flex;flex-wrap:wrap;gap:12px 26px;justify-content:space-between;align-items:center}
+footer .fbrand{display:flex;align-items:center;gap:9px}
 </style>
 </head>
 <body>
 
 <nav><div class="wrap">
-  <a class="brand" href="#">Saryu</a>
+  <a class="brand" href="#">
+    <svg viewBox="0 0 96 96" width="30" height="30" aria-hidden="true">
+      <circle cx="48" cy="38" r="15" fill="#e08a1e"/>
+      <g stroke="#e08a1e" stroke-width="4.5" stroke-linecap="round">
+        <line x1="48" y1="8" x2="48" y2="16"/><line x1="17" y1="38" x2="25" y2="38"/><line x1="79" y1="38" x2="71" y2="38"/>
+        <line x1="26" y1="16" x2="32" y2="22"/><line x1="70" y1="16" x2="64" y2="22"/>
+      </g>
+      <path d="M8 70 C 24 58, 34 82, 48 70 S 72 58, 88 70" stroke="#0f6d82" stroke-width="8" fill="none" stroke-linecap="round"/>
+    </svg>
+    <span>Saryu</span>
+  </a>
   <a class="l" href="#idea">Idea</a>
   <a class="l" href="#architecture">Architecture</a>
   <a class="l" href="#why">Why this way</a>
   <a class="l" href="#results">Results</a>
   <a class="l" href="#start">Quickstart</a>
   <a class="l" href="https://github.com/varun29ankuS/saryu/blob/main/paper/main.pdf">Paper</a>
-  <a class="l" href="https://github.com/varun29ankuS/saryu">GitHub</a>
+  <a class="l cta" href="https://github.com/varun29ankuS/saryu">GitHub</a>
 </div></nav>
 
-<header class="hero"><div class="wrap">
-  <svg class="wave" viewBox="0 -20 520 360" aria-hidden="true"><path d="M0 170 C 90 40, 170 40, 260 150 S 430 260, 520 110" stroke="var(--river2)" stroke-width="22" fill="none" stroke-linecap="round"/><path d="M0 220 C 90 90, 170 90, 260 200 S 430 310, 520 160" stroke="var(--sun)" stroke-width="10" fill="none" stroke-linecap="round"/></svg>
-  <h1>Saryu</h1>
-  <p class="lead">A recurrent language model whose state is moved by <em>Householder reflections</em> — so it remembers the order of what it read, stays provably bounded, and costs the same per token at any context length.</p>
-  <div class="btns">
-    <a class="btn primary" href="https://github.com/varun29ankuS/saryu">View on GitHub</a>
-    <a class="btn" href="https://github.com/varun29ankuS/saryu/blob/main/paper/main.pdf">Read the paper (draft v1)</a>
-    <a class="btn" href="https://github.com/varun29ankuS/saryu/releases/tag/v0.1">Download weights</a>
-  </div>
-  <div class="stats">
-    <div class="stat"><b>11,904</b><span>numbers of state for the whole 25M model, at any context length</span></div>
-    <div class="stat"><b>1.433 bpc</b><span>on enwik8 characters, at the 512-character context the 25M model actually uses</span></div>
-    <div class="stat"><b>4.8 × 10⁻⁷</b><span>largest gap between the parallel kernel and the step-by-step recurrence</span></div>
+<header class="hero"><div class="wrap heroGrid">
+  <img class="mark" src="logo.svg" alt="Saryu logo: a rising sun over a river">
+  <div>
+    <h1>Saryu</h1>
+    <p class="etym">Named for the river that runs past Ayodhya, city of the Suryavansh — the solar dynasty.</p>
+    <p class="lead">A recurrent language model whose state is moved by <b>Householder reflections</b> — so it remembers the order of what it read, stays provably bounded, and costs the same per token at any context length.</p>
+    <div class="btns">
+      <a class="btn primary" href="https://github.com/varun29ankuS/saryu">View on GitHub</a>
+      <a class="btn" href="https://github.com/varun29ankuS/saryu/blob/main/paper/main.pdf">Read the paper (draft v1)</a>
+      <a class="btn" href="https://github.com/varun29ankuS/saryu/releases/tag/v0.1">Download weights</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>11,904</b><span>numbers of state for the whole 25M model, at any context length</span></div>
+      <div class="stat"><b>1.433 bpc</b><span>on enwik8 characters, at the 512-character context the model actually uses</span></div>
+      <div class="stat"><b>4.8 × 10⁻⁷</b><span>largest gap between the parallel kernel and the step-by-step recurrence</span></div>
+    </div>
   </div>
 </div></header>
 
 <section id="idea"><div class="wrap">
   <div class="kicker">The idea</div>
   <h2>Order lives in the state</h2>
-  <p class="sub">Every layer keeps a small vector per head. Each token applies two input-dependent Householder transforms to it, then a gate mixes in new content. A reflection preserves the state's length, and two reflections about different mirrors do not commute — so reading <i>a then b</i> leaves a different state than <i>b then a</i>. Try it.</p>
+  <p class="sub">Every layer keeps a small vector per head. Each token applies two input-dependent Householder transforms to it, then a gate mixes in new content. A reflection preserves the state's length, and two reflections about different mirrors do not commute — so reading <i>a then b</i> leaves a different state than <i>b then a</i>. Drag the state, move the mirrors.</p>
   <div class="grid2">
     <div class="card" id="demo">
       <svg id="demoSvg" viewBox="0 0 440 440" role="img" aria-label="Two reflections applied in both orders"></svg>
       <div class="legend">
-        <span><i class="sw" style="background:var(--ink)"></i>state v (drag it)</span>
-        <span><i class="sw" style="background:var(--blue)"></i>H₂H₁v</span>
-        <span><i class="sw" style="background:var(--red)"></i>H₁H₂v</span>
-        <span><i class="sw" style="background:var(--muted)"></i>mirrors</span>
+        <span><i class="sw" style="background:#16242c"></i>state v (drag it)</span>
+        <span><i class="sw" style="background:#1f6f8b"></i>H₂H₁v</span>
+        <span><i class="sw" style="background:#c0562b"></i>H₁H₂v</span>
+        <span><i class="sw" style="background:#9aa7ad"></i>mirrors</span>
       </div>
     </div>
     <div>
@@ -200,15 +234,15 @@ g_t = ½ (1 − cos φ_t) ≤ 0.9</div>
     <div class="card"><h3><span>05</span>A convex, scalar gate</h3><p>Every transform has spectral norm ≤ 1 and the write is a convex mix, so the state is bounded by its inputs for every sequence. One scalar per head commutes with the reflections — that is what makes the exact kernel possible; a per-dimension gate breaks it.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/evidence/chunkwise.py">evidence/chunkwise.py →</a></div>
     <div class="card"><h3><span>06</span>An exact kernel, not an approximation</h3><p>Training processes chunks of 8 tokens with one unit lower-triangular solve each and no matrix inverse, with log-space rescaling that stays below e<sup>8.1</sup>. It equals the recurrence to float precision, and the tests check it on every push.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/tests/test_model.py">tests/test_model.py →</a></div>
     <div class="card"><h3><span>07</span>A small state, facts elsewhere</h3><p>A vector per head is cheap and suits tracking <i>where</i> a sequence is. It cannot hold many independent facts, so that job is planned for a matrix memory addressed by the tracked state — designed, not yet training.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/tree/main/experimental/memory">experimental/memory →</a></div>
-    <div class="card"><h3><span>08</span>The block matters, so hold it fixed</h3><p>A GRU placed inside the same block comes close to Saryu at 5M. The surrounding anatomy does a lot of work, so comparisons keep the block fixed and swap only the transport.</p><a class="ev" href="#results">results table →</a></div>
-    <div class="card"><h3><span>09</span>Small and falsifiable first</h3><p>Everything so far runs on one T4 GPU or a laptop CPU, so each design question is settled in hours. Predictions are committed before a run and reported either way — including a control recorded as falsified.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/evidence/same_order.py">evidence/same_order.py →</a></div>
+    <div class="card"><h3><span>08</span>The block matters, so hold it fixed</h3><p>A GRU placed inside the same block came close to Saryu at 5M. The surrounding anatomy does a lot of work, so comparisons keep the block fixed and swap only the transport.</p><a class="ev" href="#results">results →</a></div>
+    <div class="card"><h3><span>09</span>Small and falsifiable first</h3><p>Everything so far runs on one T4 GPU or a laptop CPU, so each design question is settled in hours. Predictions are committed before a run and reported either way — including a control recorded as falsified, and a published claim withdrawn.</p><a class="ev" href="https://github.com/varun29ankuS/saryu/blob/main/evidence/same_order.py">evidence/same_order.py →</a></div>
   </div>
 </div></section>
 
 <section id="results"><div class="wrap">
   <div class="kicker">Results so far</div>
   <h2>Character-level enwik8</h2>
-  <p class="sub">Bits per character on the last 128 characters of 64 random evaluation windows at each context length. Every model was trained at context 128. Lower is better.</p>
+  <p class="sub">Bits per character on the last 128 characters of 64 evaluation windows, with identical text scored at every context length. Both models were trained at context 128. Lower is better.</p>
   <div class="tablewrap"><table>
     <thead><tr><th>model</th><th>params</th><th>steps</th><th>ctx 128</th><th>ctx 512</th><th>ctx 2048</th><th>ctx 8192</th></tr></thead>
     <tbody>
@@ -232,7 +266,7 @@ g_t = ½ (1 − cos φ_t) ≤ 0.9</div>
   <div class="kicker">Quickstart</div>
   <h2>Run it in a minute</h2>
   <p class="sub">Python 3.10+. The demos need only the weights; training also needs the corpus.</p>
-  <pre class="code"><button class="copy">copy</button>git clone https://github.com/varun29ankuS/saryu && cd saryu
+  <pre class="code"><button class="copy">copy</button>git clone https://github.com/varun29ankuS/saryu &amp;&amp; cd saryu
 pip install -r requirements.txt
 gh release download v0.1 --repo varun29ankuS/saryu -D checkpoints</pre>
   <pre class="code"><button class="copy">copy</button>python -m pytest tests                                  <span class="cmt"># kernel exactness, norm, order, checkpoints</span>
@@ -245,7 +279,7 @@ python scripts/serve.py                                 <span class="cmt"># web 
   <h2>Where Saryu is</h2>
   <div class="status" style="margin-top:22px">
     <div class="card ok"><b>Works</b>The reflection recurrence at 5M and 25M parameters, the exact kernel, released weights, tests and demos.</div>
-    <div class="card next"><b>Next</b>Matched comparisons at larger scale with several seeds and a second corpus; a fused GPU kernel.</div>
+    <div class="card next"><b>Next</b>Matched comparisons at larger scale with several seeds and a second corpus; a fused GPU kernel; longer-memory gating.</div>
     <div class="card plan"><b>Planned</b>A matrix memory for facts, addressed by the tracked state — once the tracker learns to change state only when it should.</div>
   </div>
 </div></section>
@@ -263,19 +297,25 @@ python scripts/serve.py                                 <span class="cmt"># web 
 </div></section>
 
 <footer><div class="wrap">
-  <span>Saryu · Varun Sharma · code and weights under Apache-2.0</span>
+  <span class="fbrand">
+    <svg viewBox="0 0 96 96" width="22" height="22" aria-hidden="true">
+      <circle cx="48" cy="38" r="15" fill="#e08a1e"/>
+      <path d="M8 70 C 24 58, 34 82, 48 70 S 72 58, 88 70" stroke="#0f6d82" stroke-width="8" fill="none" stroke-linecap="round"/>
+    </svg>
+    Saryu · Varun Sharma · code and weights under Apache-2.0
+  </span>
   <span><a href="https://github.com/varun29ankuS/saryu">GitHub</a> · <a href="https://github.com/varun29ankuS/saryu/blob/main/paper/main.pdf">Paper</a> · <a href="https://github.com/varun29ankuS/saryu/releases/tag/v0.1">Weights</a></span>
 </div></footer>
 
 <script>
 (function(){
-  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   const NS = 'http://www.w3.org/2000/svg';
+  const C_INK = '#16242c', C_MUTED = '#9aa7ad', C_LINE = '#e7ddcc', C_A = '#1f6f8b', C_B = '#c0562b', C_SUN = '#e08a1e', C_RIVER = '#0f6d82';
   const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
 
   /* ---------------- reflection demo ---------------- */
   const svg = document.getElementById('demoSvg');
-  const S = 440, C = S/2, K = 88;               // scale: 1 unit = 88px
+  const S = 440, C = S/2, K = 88;
   let v = [1.5, 0.55];
   const ang = document.getElementById('ang'), beta = document.getElementById('beta');
   const toS = p => [C + p[0]*K, C - p[1]*K];
@@ -285,30 +325,30 @@ python scripts/serve.py                                 <span class="cmt"># web 
     const a = toS(p), b = toS(q);
     const l = el('line', {x1:a[0], y1:a[1], x2:b[0], y2:b[1], stroke:color, 'stroke-width':width, 'stroke-linecap':'round'}, svg);
     if (dash) l.setAttribute('stroke-dasharray', dash);
-    const ang = Math.atan2(b[1]-a[1], b[0]-a[0]), s = 9 + width;
+    const th = Math.atan2(b[1]-a[1], b[0]-a[0]), s = 9 + width;
     if (Math.hypot(b[0]-a[0], b[1]-a[1]) > 12)
-      el('path', {d:`M${b[0]},${b[1]} L${b[0]-s*Math.cos(ang-0.4)},${b[1]-s*Math.sin(ang-0.4)} L${b[0]-s*Math.cos(ang+0.4)},${b[1]-s*Math.sin(ang+0.4)} Z`, fill:color}, svg);
+      el('path', {d:`M${b[0]},${b[1]} L${b[0]-s*Math.cos(th-0.4)},${b[1]-s*Math.sin(th-0.4)} L${b[0]-s*Math.cos(th+0.4)},${b[1]-s*Math.sin(th+0.4)} Z`, fill:color}, svg);
   }
   function label(p, text, color){ const s = toS(p); const t = el('text', {x:s[0]+8, y:s[1]-8, fill:color, 'font-size':15, 'font-family':'Inter, sans-serif', 'font-weight':600}, svg); t.textContent = text; }
   function draw(){
     svg.innerHTML = '';
-    const ink = css('--ink'), muted = css('--muted'), line = css('--line'), blue = css('--blue'), red = css('--red');
+    el('rect', {x:0, y:0, width:S, height:S, rx:10, fill:'#fdfbf7'}, svg);
     for (let i = -2; i <= 2; i++){
-      el('line', {x1:C+i*K, y1:0, x2:C+i*K, y2:S, stroke:line, 'stroke-width':i===0?1.4:0.7}, svg);
-      el('line', {x1:0, y1:C+i*K, x2:S, y2:C+i*K, stroke:line, 'stroke-width':i===0?1.4:0.7}, svg);
+      el('line', {x1:C+i*K, y1:8, x2:C+i*K, y2:S-8, stroke:C_LINE, 'stroke-width':i===0?1.5:0.8}, svg);
+      el('line', {x1:8, y1:C+i*K, x2:S-8, y2:C+i*K, stroke:C_LINE, 'stroke-width':i===0?1.5:0.8}, svg);
     }
     const a2 = ang.value * Math.PI / 180, b = beta.value / 100;
-    const u1 = [0, 1], u2 = [-Math.sin(a2), Math.cos(a2)];          // mirror 1 along x, mirror 2 at angle a2
+    const u1 = [0, 1], u2 = [-Math.sin(a2), Math.cos(a2)];
     [[1,0],[Math.cos(a2), Math.sin(a2)]].forEach(m => {
-      const p = toS([-2.4*m[0], -2.4*m[1]]), q = toS([2.4*m[0], 2.4*m[1]]);
-      el('line', {x1:p[0], y1:p[1], x2:q[0], y2:q[1], stroke:muted, 'stroke-width':1.3, 'stroke-dasharray':'6 6'}, svg);
+      const p = toS([-2.3*m[0], -2.3*m[1]]), q = toS([2.3*m[0], 2.3*m[1]]);
+      el('line', {x1:p[0], y1:p[1], x2:q[0], y2:q[1], stroke:C_MUTED, 'stroke-width':1.4, 'stroke-dasharray':'7 6'}, svg);
     });
     const h1 = H(u1, b, v), h21 = H(u2, b, h1), h2 = H(u2, b, v), h12 = H(u1, b, h2);
-    arrow(v, h1, blue, 1.6, '3 5'); arrow(h1, h21, blue, 1.6, '3 5');
-    arrow(v, h2, red, 1.6, '3 5');  arrow(h2, h12, red, 1.6, '3 5');
-    arrow([0,0], h21, blue, 3.4); arrow([0,0], h12, red, 3.4); arrow([0,0], v, ink, 3.4);
-    label(h21, 'H₂H₁v', blue); label(h12, 'H₁H₂v', red); label(v, 'v', ink);
-    const handle = toS(v); el('circle', {cx:handle[0], cy:handle[1], r:9, fill:'transparent', stroke:ink, 'stroke-width':1.5, id:'vh', style:'cursor:grab'}, svg);
+    arrow(v, h1, C_A, 1.5, '3 5'); arrow(h1, h21, C_A, 1.5, '3 5');
+    arrow(v, h2, C_B, 1.5, '3 5');  arrow(h2, h12, C_B, 1.5, '3 5');
+    arrow([0,0], h21, C_A, 3.4); arrow([0,0], h12, C_B, 3.4); arrow([0,0], v, C_INK, 3.4);
+    label(h21, 'H₂H₁v', C_A); label(h12, 'H₁H₂v', C_B); label(v, 'v', C_INK);
+    const handle = toS(v); el('circle', {cx:handle[0], cy:handle[1], r:9, fill:'transparent', stroke:C_INK, 'stroke-width':1.5, style:'cursor:grab'}, svg);
     document.getElementById('oAng').textContent = ang.value + '°';
     document.getElementById('oBeta').textContent = b.toFixed(2);
     const gap = Math.hypot(h21[0]-h12[0], h21[1]-h12[1]);
@@ -331,32 +371,29 @@ python scripts/serve.py                                 <span class="cmt"># web 
   function chart(id, xs, xlabels, series, ymin, ymax, yticks, xtitle, ytitle, legendY){
     const g = document.getElementById(id); g.innerHTML = '';
     const W = 460, Hh = 280, L = 58, R = 34, T = 16, B = 44;
-    const muted = css('--muted'), line = css('--line'), ink = css('--ink');
     const X = i => L + (W-L-R) * i / (xs.length - 1), Y = y => T + (Hh-T-B) * (1 - (y - ymin) / (ymax - ymin));
-    yticks.forEach(t => { el('line', {x1:L, x2:W-R, y1:Y(t), y2:Y(t), stroke:line}, g); const tx = el('text', {x:L-8, y:Y(t)+4, 'text-anchor':'end', 'font-size':11, fill:muted, 'font-family':'JetBrains Mono, monospace'}, g); tx.textContent = t; });
-    xlabels.forEach((t, i) => { const tx = el('text', {x:X(i), y:Hh-B+18, 'text-anchor':'middle', 'font-size':11, fill:muted, 'font-family':'JetBrains Mono, monospace'}, g); tx.textContent = t; });
-    const xt = el('text', {x:(L+W-R)/2, y:Hh-6, 'text-anchor':'middle', 'font-size':12, fill:muted, 'font-family':'Inter, sans-serif'}, g); xt.textContent = xtitle;
-    const yt = el('text', {x:14, y:(T+Hh-B)/2, 'text-anchor':'middle', 'font-size':12, fill:muted, 'font-family':'Inter, sans-serif', transform:`rotate(-90 14 ${(T+Hh-B)/2})`}, g); yt.textContent = ytitle;
+    yticks.forEach(t => { el('line', {x1:L, x2:W-R, y1:Y(t), y2:Y(t), stroke:C_LINE}, g);
+      const tx = el('text', {x:L-8, y:Y(t)+4, 'text-anchor':'end', 'font-size':11, fill:'#7b878e', 'font-family':'JetBrains Mono, monospace'}, g); tx.textContent = t; });
+    xlabels.forEach((t, i) => { const tx = el('text', {x:X(i), y:Hh-B+18, 'text-anchor':'middle', 'font-size':11, fill:'#7b878e', 'font-family':'JetBrains Mono, monospace'}, g); tx.textContent = t; });
+    const xt = el('text', {x:(L+W-R)/2, y:Hh-6, 'text-anchor':'middle', 'font-size':12, fill:'#7b878e', 'font-family':'Inter, sans-serif'}, g); xt.textContent = xtitle;
+    const yt = el('text', {x:14, y:(T+Hh-B)/2, 'text-anchor':'middle', 'font-size':12, fill:'#7b878e', 'font-family':'Inter, sans-serif', transform:`rotate(-90 14 ${(T+Hh-B)/2})`}, g); yt.textContent = ytitle;
     series.forEach((s, k) => {
-      const color = css(s.color);
-      el('path', {d: s.y.map((y, i) => (i ? 'L' : 'M') + X(i) + ',' + Y(y)).join(' '), stroke:color, 'stroke-width':2.6, fill:'none', 'stroke-dasharray': s.dash || ''}, g);
-      s.y.forEach((y, i) => el('circle', {cx:X(i), cy:Y(y), r:4, fill:color}, g));
+      el('path', {d: s.y.map((y, i) => (i ? 'L' : 'M') + X(i) + ',' + Y(y)).join(' '), stroke:s.color, 'stroke-width':2.6, fill:'none', 'stroke-dasharray': s.dash || ''}, g);
+      s.y.forEach((y, i) => el('circle', {cx:X(i), cy:Y(y), r:4, fill:s.color}, g));
       const lx = L + 12, ly = (legendY === undefined ? T + 14 : Y(legendY)) + 18*k;
-      el('line', {x1:lx, x2:lx+18, y1:ly-4, y2:ly-4, stroke:color, 'stroke-width':2.6, 'stroke-dasharray': s.dash || ''}, g);
-      const tx = el('text', {x:lx+24, y:ly, 'font-size':12, fill:ink, 'font-family':'Inter, sans-serif'}, g); tx.textContent = s.name;
+      el('line', {x1:lx, x2:lx+18, y1:ly-4, y2:ly-4, stroke:s.color, 'stroke-width':2.6, 'stroke-dasharray': s.dash || ''}, g);
+      const tx = el('text', {x:lx+24, y:ly, 'font-size':12, fill:C_INK, 'font-family':'Inter, sans-serif'}, g); tx.textContent = s.name;
     });
   }
-  function charts(){
-    chart('chartCtx', [128,512,2048,8192], ['128','512','2048','8192'],
-      [{name:'Saryu 25M', y:[1.535,1.433,1.433,1.433], color:'--red'},
-       {name:'Saryu 5M', y:[1.671,1.586,1.586,1.586], color:'--blue'}],
-      1.39, 1.75, [1.4,1.5,1.6,1.7], 'context length read', 'bits per character');
-    chart('chartLayers', [0,1,2,3], ['layer 1','layer 2','layer 3','layer 4'],
-      [{name:'mean β (2 = reflection)', y:[1.811,1.782,1.543,0.984], color:'--red'},
-       {name:'mean gate g (1 = overwrite)', y:[0.433,0.294,0.185,0.093], color:'--river2'},
-       {name:'share of exact reflections', y:[0.232,0.165,0.128,0.054], color:'--sun', dash:'5 4'}],
-      0, 2.2, [0,0.5,1,1.5,2], '', 'mean over tokens and heads', 1.42);
-  }
+  chart('chartCtx', [128,512,2048,8192], ['128','512','2048','8192'],
+    [{name:'Saryu 25M', y:[1.535,1.433,1.433,1.433], color:C_B},
+     {name:'Saryu 5M', y:[1.671,1.586,1.586,1.586], color:C_A}],
+    1.39, 1.75, [1.4,1.5,1.6,1.7], 'context length read', 'bits per character');
+  chart('chartLayers', [0,1,2,3], ['layer 1','layer 2','layer 3','layer 4'],
+    [{name:'mean β (2 = reflection)', y:[1.811,1.782,1.543,0.984], color:C_B},
+     {name:'mean gate g (1 = overwrite)', y:[0.433,0.294,0.185,0.093], color:C_RIVER},
+     {name:'share of exact reflections', y:[0.232,0.165,0.128,0.054], color:C_SUN, dash:'5 4'}],
+    0, 2.2, [0,0.5,1,1.5,2], '', 'mean over tokens and heads', 1.42);
 
   /* ---------------- copy buttons ---------------- */
   document.querySelectorAll('button.copy').forEach(b => b.addEventListener('click', () => {
@@ -364,9 +401,7 @@ python scripts/serve.py                                 <span class="cmt"># web 
     navigator.clipboard.writeText(text).then(() => { b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1400); });
   }));
 
-  function all(){ draw(); charts(); }
-  all();
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', all);
+  draw();
 })();
 </script>
 </body>
