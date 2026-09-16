@@ -1,0 +1,87 @@
+DOES THE TRACE LAW HOLD IN A TRAINED MODEL?
+MQAR 4 pairs, gap 4, d=128, 2 layers, d_h=16, lr=0.0003, 1500 steps, seeds [0]
+chance = 1/64 = 0.016
+
+ n_h  sd   recall    trace    exact  exp form     dev  mean beta
+----------------------------------------------------------------
+      nh=2 sd0   375/1500 loss 4.187 19s elapsed, 56s left
+      nh=2 sd0   750/1500 loss 3.917 38s elapsed, 38s left
+      nh=2 sd0  1125/1500 loss 3.558 58s elapsed, 19s left
+      nh=2 sd0  1500/1500 loss 3.744 78s elapsed, 0s left
+   2   0    0.113    0.818    0.766     0.779  +0.052      1.558   (78s)
+      nh=4 sd0   375/1500 loss 4.187 23s elapsed, 69s left
+      nh=4 sd0   750/1500 loss 4.141 46s elapsed, 46s left
+      nh=4 sd0  1125/1500 loss 3.988 69s elapsed, 23s left
+      nh=4 sd0  1500/1500 loss 3.913 92s elapsed, 0s left
+   4   0    0.047    0.611    0.586     0.607  +0.025      1.880   (92s)
+      nh=8 sd0   375/1500 loss 4.187 29s elapsed, 88s left
+      nh=8 sd0   750/1500 loss 4.126 59s elapsed, 59s left
+      nh=8 sd0  1125/1500 loss 4.128 88s elapsed, 29s left
+      nh=8 sd0  1500/1500 loss 4.155 118s elapsed, 0s left
+   8   0    0.020    0.364    0.344     0.368  +0.020      1.960   (118s)
+      nh=16 sd0   375/1500 loss 4.194 54s elapsed, 163s left
+      nh=16 sd0   750/1500 loss 4.137 108s elapsed, 108s left
+      nh=16 sd0  1125/1500 loss 4.112 161s elapsed, 54s left
+      nh=16 sd0  1500/1500 loss 4.164 214s elapsed, 0s left
+  16   0    0.004    0.122    0.118     0.135  +0.004      1.960   (215s)
+
+REGISTERED PREDICTIONS
+  P1 trace falls monotonically with n_h and within 0.15 of the law:
+     monotone True, worst deviation 0.052  -> HOLDS
+  P2 recall at n_h=16 exceeds n_h=2 by >= 0.20:
+     0.113 -> 0.004, gain -0.109  -> FAILS
+
+  P1 without P2: the geometry is right, but n_h alone does not buy recall here.
+  The unifying claim in both papers must be softened to "by construction".
+
+=============================================================================
+WHAT THIS MEANS -- AND WHAT THE PAPERS WERE MISSING
+
+THE CONFOUND IS GONE. The gap-64 sweep (nh_sweep.txt) put every arm at chance, so it
+could not tell "n_h does not help" from "nothing learns here". Two controls fixed that:
+
+    1 pair, gap 0    recall 1.000 at n_h=2   -> the harness learns recall perfectly well
+    1 pair, gap 64   recall 0.012 / 0.023    -> a 64-token gap is a RETENTION wall
+    4 pairs, gap 4   learnable, and the range below is real
+
+THE RESULT REVERSES THE PREDICTION. At a gap the model can handle:
+
+    n_h        2        4        8       16
+    recall     0.113    0.047    0.020    0.004        (chance 0.016)
+    trace      0.818    0.611    0.364    0.122
+    mean beta  1.558    1.880    1.960    1.960
+
+P1 holds: the trace tracks (1-2/d_h)^n_h. P2 does not merely fail, it fails BACKWARDS --
+more reflections monotonically DESTROY recall, ending below chance. The registered
+prediction was a gain of at least +0.20; the measured gain is -0.109.
+
+WHY, AND THIS IS THE THING WE WERE MISSING. The by-construction result binds a key to a
+value, sums the pairs into a state, and reads one back by applying that key's reflections
+AGAIN -- reflections are involutions, so the second application unbinds. Two things that
+scheme assumes are false in this architecture:
+
+  no unbind step   The recurrence only ever transports forward. Nothing applies a key's
+                   inverse at read time, so a bound pair is never undone on purpose.
+  the state is re-transported   Every later token applies ITS transport to the WHOLE
+                   state. The by-construction scheme assumes a bound pair sits untouched
+                   until it is read; here it is hit by every token in between, and those
+                   transports do not cancel.
+
+Under those conditions a larger n_h is not extra capacity, it is a faster scrambler --
+which is exactly the monotone decay above.
+
+The beta column shows the model reaching the same conclusion by itself. At n_h=2, where
+it can still choose, it backs off to beta=1.558, i.e. AWAY from pure reflection, raising
+the trace to 0.818 and keeping the state more nearly intact. At n_h=8 and 16 it stays at
+beta~1.96 and there is no setting of beta that saves it: with sixteen reflections per
+token the state cannot be preserved at all.
+
+WHAT THE PAPERS MUST NOT SAY. "The same transport is a tracker at small k and an
+associative store at k ~ d/2" is TRUE of the mechanism in isolation and FALSE of this
+recurrence as built. The trace law describes what a product of reflections could store;
+it does not license the claim that raising n_h gives this architecture a memory. That
+correction is now in paper A Section 5.5 and paper B Section 8.
+
+WHAT WOULD ACTUALLY BE NEEDED: a read path that applies the inverse transport of the
+query, and a way to protect a stored pair from the transports of intervening tokens --
+a different architecture, not a different n_h.

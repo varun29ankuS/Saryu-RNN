@@ -643,10 +643,33 @@ involved: the weights are set by hand, $d=64$.}
 \label{fig:trace}
 \end{figure}
 
-So the same transport is a tracker at small $k$ and an associative store at $k\approx d/2$, and the
-character is what separates the regimes. A layer that composes group elements perfectly and cannot
-retain one fact among four is not exhibiting two unrelated limitations; it is at one end of a single
-curve.
+So a product of reflections is a tracker at small $k$ and, \emph{as a bind/unbind scheme}, an
+associative store at $k\approx d/2$; the character is what separates the regimes. A layer that
+composes group elements perfectly and cannot retain one fact among four is not exhibiting two
+unrelated limitations; it is at one end of a single curve.
+
+\paragraph{But the recurrence cannot walk along that curve.} We tested the obvious consequence in a
+trained language model, sweeping $n_h$ with everything else fixed, and it failed --- backwards. The
+trace behaves exactly as derived: measured $0.818$, $0.611$, $0.364$, $0.122$ at $n_h=2,4,8,16$
+against $(1-2/d_h)^{n_h}$ of $0.766$, $0.586$, $0.344$, $0.118$. Recall does the opposite of what
+more capacity would predict, falling monotonically from $0.113$ to $0.004$ as $n_h$ rises, ending
+below chance.
+
+The reason is a mismatch between the scheme and the architecture, and it is worth stating plainly
+because it was implicit in the claim above. The by-construction store binds a key to a value, sums
+the pairs, and recovers one by applying that key's reflections \emph{again} --- an involution, so
+the second application unbinds. A recurrence does neither thing: it never applies a query's inverse
+at read time, and every subsequent token applies its own transport to the \emph{whole} state, so a
+stored pair is re-transported by everything that follows rather than sitting untouched until read.
+Under those conditions more reflections per token are not more capacity, they are a faster
+scrambler. The model appears to know it: at $n_h=2$, where it still has the freedom, it settles at
+$\beta=1.56$ --- away from the pure reflection $\beta=2$ --- keeping the state more nearly intact,
+while at $n_h=16$ no $\beta$ can save it.
+
+The law therefore describes what a product of reflections \emph{could} store. It does not license
+the claim that raising $n_h$ gives this architecture a memory, and we withdraw that reading. Getting
+the capacity would need a read path that applies the query's inverse and some way to shield a stored
+pair from intervening tokens: a different architecture, not a different $n_h$.
 
 % ======================================================================================
 \section{What a quotient is good for}

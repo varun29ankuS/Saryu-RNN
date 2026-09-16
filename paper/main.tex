@@ -711,11 +711,27 @@ a step, and at the best chunk it is 17--53\%.
 adding a matrix memory beside the tracker, on the assumption that a vector state cannot hold many
 independent facts~\cite{arora2023zoology}. Section~\ref{sec:binding} shows that assumption was wrong
 in an instructive way. The state stores associations perfectly well; what fails is the binding
-operator, because a single reflection hides almost nothing. Raising $n_h$ for a subset of heads fixes
-it with the operator already in the architecture, no second state and no second kernel
-(Figure~\ref{fig:memory}). The design that follows is heterogeneous: tracking heads at $n_h=2$, where
-near-identity transports compose across tokens, and storage heads at $n_h\approx d/4$ to $d/2$, where
-the transport is close to Haar-random and conceals a value until its key returns.
+operator, because a single reflection hides almost nothing. That suggested a heterogeneous layer ---
+tracking heads at $n_h=2$, where near-identity transports compose across tokens, and storage heads at
+$n_h\approx d/4$ to $d/2$, where the transport is close to Haar-random and conceals a value until its
+key returns (Figure~\ref{fig:memory}).
+
+\paragraph{We tested that, and it does not work.} Sweeping $n_h$ in a trained model, with everything
+else held fixed, the trace follows the law closely ($0.818$, $0.611$, $0.364$, $0.122$ at
+$n_h=2,4,8,16$, against a predicted $0.766$, $0.586$, $0.344$, $0.118$) --- and recall falls
+monotonically, $0.113\to0.047\to0.020\to0.004$, ending below chance. More reflections made the memory
+worse, not better, and the registered prediction of a $+0.20$ gain came out at $-0.109$.
+
+The mismatch is structural rather than a matter of tuning. A bind/unbind store recovers a value by
+applying its key's reflections a second time, an involution undoing the first; and it assumes the
+bound pair is untouched between write and read. This recurrence does neither --- it never applies a
+query's inverse, and every later token transports the \emph{whole} state, so a stored pair is
+scrambled by everything that follows. At $n_h=2$ the trained model backs off to $\beta=1.56$, away
+from the pure reflection, to keep the state intact; at $n_h=16$ no $\beta$ rescues it. The trace law
+bounds what a product of reflections could store, and we no longer claim that raising $n_h$ turns
+this architecture into a memory. A read path that applies the query's inverse, and some protection
+for a stored pair from intervening tokens, would be a different architecture --- which is the honest
+open problem, and the matrix memory this paragraph set out to avoid may yet be the simpler answer.
 
 Two things that this does \emph{not} fix are worth stating. Recall still decays with distance
 (0.234 at gap 0 against 0.062 at gap 64 under a curriculum), because the transport rotates the stored

@@ -1,0 +1,25 @@
+DOES THE TRACE LAW HOLD IN A TRAINED MODEL?
+MQAR 1 pairs, gap 64, d=128, 2 layers, d_h=16, lr=0.0003, 1500 steps, seeds [0]
+chance = 1/64 = 0.016
+
+ n_h  sd   recall    trace    exact  exp form     dev  mean beta
+----------------------------------------------------------------
+      nh=2 sd0   375/1500 loss 4.165 62s elapsed, 185s left
+      nh=2 sd0   750/1500 loss 4.138 127s elapsed, 127s left
+      nh=2 sd0  1125/1500 loss 4.185 194s elapsed, 65s left
+      nh=2 sd0  1500/1500 loss 4.160 261s elapsed, 0s left
+   2   0    0.012    0.772    0.766     0.779  +0.006      1.982   (261s)
+      nh=16 sd0   375/1500 loss 4.233 248s elapsed, 745s left
+      nh=16 sd0   750/1500 loss 4.149 498s elapsed, 498s left
+      nh=16 sd0  1125/1500 loss 4.186 751s elapsed, 250s left
+      nh=16 sd0  1500/1500 loss 4.165 1001s elapsed, 0s left
+  16   0    0.023    0.137    0.118     0.135  +0.019      1.953   (1003s)
+
+REGISTERED PREDICTIONS
+  P1 trace falls monotonically with n_h and within 0.15 of the law:
+     monotone True, worst deviation 0.019  -> HOLDS
+  P2 recall at n_h=16 exceeds n_h=2 by >= 0.20:
+     0.012 -> 0.023, gain +0.012  -> FAILS
+
+  P1 without P2: the geometry is right, but n_h alone does not buy recall here.
+  The unifying claim in both papers must be softened to "by construction".

@@ -1,0 +1,66 @@
+DOES THE TRACE LAW HOLD IN A TRAINED MODEL?
+MQAR 4 pairs, gap 64, d=128, 2 layers, d_h=16, lr=0.0003, 1500 steps, seeds [0]
+chance = 1/64 = 0.016
+
+ n_h  sd   recall    trace    exact  exp form     dev  mean beta
+----------------------------------------------------------------
+      nh=2 sd0   375/1500 loss 4.168 105s elapsed, 315s left
+      nh=2 sd0   750/1500 loss 4.189 391s elapsed, 391s left
+      nh=2 sd0  1125/1500 loss 4.198 687s elapsed, 229s left
+      nh=2 sd0  1500/1500 loss 4.155 919s elapsed, 0s left
+   2   0    0.012    0.770    0.766     0.779  +0.005      1.976   (921s)
+      nh=4 sd0   375/1500 loss 4.133 343s elapsed, 1029s left
+      nh=4 sd0   750/1500 loss 4.195 687s elapsed, 687s left
+      nh=4 sd0  1125/1500 loss 4.197 839s elapsed, 280s left
+      nh=4 sd0  1500/1500 loss 4.163 938s elapsed, 0s left
+   4   0    0.012    0.591    0.586     0.607  +0.005      1.976   (939s)
+      nh=8 sd0   375/1500 loss 4.179 128s elapsed, 383s left
+      nh=8 sd0   750/1500 loss 4.193 256s elapsed, 256s left
+      nh=8 sd0  1125/1500 loss 4.203 387s elapsed, 129s left
+      nh=8 sd0  1500/1500 loss 4.166 523s elapsed, 0s left
+   8   0    0.012    0.355    0.344     0.368  +0.011      1.963   (524s)
+      nh=16 sd0   375/1500 loss 4.177 270s elapsed, 809s left
+      nh=16 sd0   750/1500 loss 4.190 543s elapsed, 543s left
+      nh=16 sd0  1125/1500 loss 4.189 816s elapsed, 272s left
+      nh=16 sd0  1500/1500 loss 4.161 1090s elapsed, 0s left
+  16   0    0.016    0.136    0.118     0.135  +0.018      1.963   (1092s)
+
+REGISTERED PREDICTIONS
+  P1 trace falls monotonically with n_h and within 0.15 of the law:
+     monotone True, worst deviation 0.018  -> HOLDS
+  P2 recall at n_h=16 exceeds n_h=2 by >= 0.20:
+     0.012 -> 0.016, gain +0.004  -> FAILS
+
+  P1 without P2: the geometry is right, but n_h alone does not buy recall here.
+  The unifying claim in both papers must be softened to "by construction".
+
+=============================================================================
+READING THIS HONESTLY  (added after the run, before anything went into a paper)
+
+P1 HOLDS, and it is the new result. A trained language model drives the trace of its
+transport to (1-2/d_h)^n_h -- measured 0.770 / 0.591 / 0.355 / 0.136 against an exact
+0.766 / 0.586 / 0.344 / 0.118, worst deviation 0.018 -- with mean beta 1.96-1.98, i.e.
+it keeps near-pure reflections rather than retreating toward the identity. The law was
+previously checked only with weights set by hand; this is the first time it has been
+confirmed in a model that learned its own reflections.
+
+P2 FAILS, BUT THE RUN CANNOT SUPPORT THE CONCLUSION THE SCRIPT PRINTS. Recall is 0.012,
+0.012, 0.012, 0.016 at n_h = 2, 4, 8, 16, and chance is 1/64 = 0.016. Every arm is at
+chance, including the baseline, so nothing learned the task at any setting. That is a
+FLOOR, not a measurement of n_h: it cannot distinguish
+
+    "raising n_h does not buy recall"                    from
+    "this training setup never learns 4-pair MQAR, whatever n_h is".
+
+The lr of 3e-4 is inherited from a TRANSFORMER triage on this task, not from a
+reflection model, so there is no evidence it is the right rate here either.
+
+So the script's closing line -- "the unifying claim in both papers must be softened to
+by construction" -- is NOT supported by this run, and the papers were not changed on the
+strength of it. The claim stands where it stood: verified by construction and, as of
+this run, verified for the trace in a trained model; the downstream recall consequence
+is still untested.
+
+WHAT WOULD SETTLE IT: a version of the task the baseline can actually learn, so there is
+dynamic range to measure. evidence/results/nh_sweep_1pair.txt runs 1-pair recall at
+n_h = 2 and 16 to find out whether the harness learns recall at all.

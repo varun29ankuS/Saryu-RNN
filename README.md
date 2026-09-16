@@ -62,9 +62,18 @@ picks exactly one, and scores the other two at the predicted 0.5
 **Binding capacity is a character.** For an orthogonal map, the expected overlap of a vector with
 its image is the normalised trace, `E[v·gv] = tr(g)/d`. A single Householder reflection has
 `tr = d−2` — the *least* hiding non-trivial element of O(d) — and k of them give overlap
-`(1−2/d)^k`. So the same knob, reflections per token, is state tracking at one end and associative
-memory at the other, and Saryu's `n_h = 2` sits at the tracking extreme
+`(1−2/d)^k`. That is why one reflection cannot bind, and why it gets worse as heads get wider
 ([`evidence/trace_law.py`](evidence/trace_law.py)).
+
+**...but more reflections do not buy this architecture a memory — we checked, and it fails
+backwards.** The obvious consequence was that raising `n_h` should turn tracking heads into storage
+heads. Swept in a trained model, the trace follows the law closely (0.818, 0.611, 0.364, 0.122 at
+`n_h` = 2, 4, 8, 16) while recall falls monotonically, 0.113 → 0.004, ending below chance
+([`evidence/nh_sweep.py`](evidence/nh_sweep.py)). A bind/unbind store recovers a value by applying
+its key's reflections a second time, and assumes the stored pair is untouched in between. A
+recurrence does neither: it never applies a query's inverse, and every later token transports the
+*whole* state. More reflections are therefore a faster scrambler, not more capacity. The trace law
+bounds what a product of reflections *could* store; it does not say this recurrence can reach it.
 
 **A trained transport can be read as a representation.** Its character norm `⟨χ,χ⟩`, computed from
 traces alone with no group table and no labels, identifies which quotient it learned. Over sixteen
