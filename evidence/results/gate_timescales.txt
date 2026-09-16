@@ -108,3 +108,48 @@ retention can only be LONGER than the ladder and the model cannot route around i
 effective context STILL stops at ~256 characters with heads that are structurally incapable of
 forgetting quickly, then long memory is useless to this model on this task, and the gate is not
 what to fix -- the write rule or the task is. That is a 20-minute run and it closes the question.
+
+================================================================================================
+ATTEMPT 4: HARD PER-HEAD CEILING -- THE HEADS FINALLY KEPT LONG MEMORY, AND IT CHANGED NOTHING
+Same setup plus GATE_CEILING=1: head h's gate is clamped to the ladder value, so its retention can
+only be LONGER. Structural -- the model cannot move a bias or grow a weight to escape it.
+
+RETENTION AFTER TRAINING (arm ceil), and it held this time:
+  layer 0 retention   2   7   23   77  260  877  3166  10078 tokens
+          at ceiling 0.68 1.00 1.00 1.00 1.00 1.00 0.92 0.99   (fraction of tokens at the clamp)
+  layer 3 retention   2   7   24   77  260  879  2962  10057 tokens
+
+                                  bpc@128   bpc@512     effective context (probe)
+base (both off)                    2.2035    2.1404     frozen by 256 characters
+ceiling                            2.2498    2.1800     frozen by 512 characters
+ceiling + write scale              2.2501    2.1835     frozen by 512 characters
+
+PROBE, arm ceil:  ctx 256  KL 0.130986  state cos 0.997595
+                  ctx 512  KL 0.000790  state cos 0.999988
+                  ctx 1024 KL 0.000000  state cos 1.000000
+
+THE RESULT. The forced-long heads do carry slightly more than the baseline did -- at context 256 the
+state disagreement is 0.9976 against the baseline's 0.9999, and the KL is 0.131 against 0.0024 -- so
+the memory is physically there. By 512 it is gone again, and the loss is 0.04-0.05 bpc WORSE than
+baseline. The model is made to retain, retains, and does not use what it retained.
+
+CONCLUSION: THE GATE IS NOT THE CONSTRAINT, AND THIS LINE IS CLOSED.
+Four attempts, each removing one escape route:
+  1 ladder in the parameter        -> erased by the input term
+  2 ladder correct in the function -> training moved the bias
+  3 bias frozen                    -> training grew the input weights
+  4 hard ceiling, unescapable      -> retention held; predictions past ~512 unchanged; loss worse
+State that is retained but unused means the problem is downstream of the gate: the convex write
+dilutes what is stored, and/or the readout ignores those heads. That is what Haller et al. 2025
+(2504.14366) predict for additive update rules -- irreversible state saturation, architecture being
+the binding constraint rather than compute.
+
+WHAT THIS DOES NOT SETTLE: "cannot use" versus "need not use". Character-level enwik8 at 1M
+parameters may simply not reward memory past a few hundred characters. Separating those needs a task
+that demands recall at distance, not a language-model loss. That is the next experiment, and it is
+cheap: if forced-long heads solve recall-at-distance while the LM ignores them, the architecture is
+fine and the task was the issue; if they fail it too, the write rule is proven guilty.
+
+CAVEATS: 1M parameters, 1000 steps, one seed, one corpus. The bpc differences here (0.04-0.05) are
+larger than the +-0.02 seed spread measured at this size, so the cost of forcing memory is real,
+but the ranking among gate variants is not.
