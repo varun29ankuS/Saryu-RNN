@@ -46,18 +46,30 @@ def chunkwise(h0, u, beta, a, b, C=CHUNK):
     B, L, n_h, d = u.shape
     outs = []
     h = h0
-    eye = torch.eye(C * n_h, device=u.device)
-    rr = torch.arange(C * n_h, device=u.device)[:, None]
-    jpos = torch.cat([torch.tensor([-1], device=u.device),
-                      (torch.arange(C, device=u.device) + 1) * n_h - 1])
-    amask = (jpos[None, :] < rr).to(u.dtype)
-    rmask = (rr < (torch.arange(C, device=u.device)[None, :] + 1) * n_h).to(u.dtype)
+
+    def _masks(Lc):
+        """Index masks for a chunk of Lc timesteps; Lc < C for a partial final chunk."""
+        R = Lc * n_h
+        eye = torch.eye(R, device=u.device)
+        rr = torch.arange(R, device=u.device)[:, None]
+        jpos = torch.cat([torch.tensor([-1], device=u.device),
+                          (torch.arange(Lc, device=u.device) + 1) * n_h - 1])
+        amask = (jpos[None, :] < rr).to(u.dtype)
+        rmask = (rr < (torch.arange(Lc, device=u.device)[None, :] + 1) * n_h).to(u.dtype)
+        return R, eye, amask, rmask
+
+    # A length that is not a multiple of C ends in a PARTIAL chunk, which needs its own masks.
+    # Until 2026-09-16 this reshaped the short slice as if it were full and raised; every length
+    # used before then (128, 512, 12, 96, 384) happened to divide by 8, so it never fired.
+    full_len = min(C, L)
+    full = _masks(full_len)
     for c0 in range(0, L, C):
-        uc = u[:, c0:c0 + C].reshape(B, C * n_h, d)
-        bc_ = beta[:, c0:c0 + C].reshape(B, C * n_h)
-        ac = a[:, c0:c0 + C]
-        bb = b[:, c0:c0 + C]
-        R = C * n_h
+        Lc = min(C, L - c0)
+        R, eye, amask, rmask = full if Lc == full_len else _masks(Lc)
+        uc = u[:, c0:c0 + Lc].reshape(B, R, d)
+        bc_ = beta[:, c0:c0 + Lc].reshape(B, R)
+        ac = a[:, c0:c0 + Lc]
+        bb = b[:, c0:c0 + Lc]
         # v3.1 NUMERICAL FIX: the naive alpha = cumprod(a) then b/alpha overflows when a
         # chunk stacks strong writes (a small -> alpha ~ 1e-50). All PHYSICAL quantities are
         # ratios alpha_t/alpha_j <= 1, so work in log space centered on the chunk mean: every

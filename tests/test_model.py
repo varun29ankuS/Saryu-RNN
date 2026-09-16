@@ -36,6 +36,18 @@ def test_chunkwise_kernel_equals_sequential_recurrence(L):
     assert err < 1e-4, err
 
 
+@pytest.mark.parametrize('L,C', [(42, 8), (42, 16), (100, 32), (130, 64), (12, 8), (7, 8)])
+def test_kernel_handles_lengths_that_are_not_a_multiple_of_the_chunk(L, C):
+    """Every length used so far (128, 512, 12, 96, 384) happened to divide by the chunk size, so a
+    partial final chunk was never exercised until a recall task produced length 42."""
+    with torch.no_grad():
+        args = _kernel_inputs(L=L)
+        out = chunkwise(*args, C)
+        assert out.shape == (args[1].shape[0], L, args[1].shape[-1]), out.shape
+        err = float((out - sequential(*args)).abs().max())
+    assert err < 1e-4, (L, C, err)
+
+
 @pytest.mark.parametrize('C', [4, 8, 16, 32, 64])
 def test_kernel_is_exact_at_every_chunk_size(C):
     """The chunk size is a performance knob, not an approximation: on a T4 it is worth 3-6x
