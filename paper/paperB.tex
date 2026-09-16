@@ -9,7 +9,13 @@
 \usepackage{tikz,pgfplots}
 \pgfplotsset{compat=1.17}
 \usepackage[colorlinks=true,linkcolor=blue!50!black,citecolor=blue!50!black,urlcolor=blue!50!black]{hyperref}
+\usetikzlibrary{positioning,arrows.meta,fit,backgrounds}
 
+\definecolor{rung}{HTML}{B3541E}
+\definecolor{meas}{HTML}{1F4E79}
+\definecolor{soft}{HTML}{6B7280}
+
+\providecommand{\citep}{\cite}
 \newtheorem{proposition}{Proposition}
 \newenvironment{proof}{\par\noindent\textit{Proof.}\ }{\hfill$\square$\par\medskip}
 \newcommand{\R}{\mathbb{R}}
@@ -39,24 +45,59 @@ learned is the quantity that governs how much information the same transport can
 \end{abstract}
 
 % ======================================================================================
-\section{The phenomenon}
+\section{Introduction}
 
-Train the transport of Section~\ref{sec:setup} on the word problem of $S_4$ and it either reaches
-$1.000$ and stays there as the evaluation length grows to $8\times$ the training length, or it settles
-on one of a small set of values: $0.250$, $0.083$, $0.042$. Those are $1/4$, $1/12$, $1/24$, and the
-normal subgroups of $S_4$ are $1$, $V_4$ (order 4), $A_4$ (order 12) and $S_4$ itself. A model that
-has learned $G/N$ knows which coset the answer lies in and cannot do better than guessing inside it,
-so its accuracy is exactly $1/|N|$.
+The word problem of a finite group is the cleanest state-tracking task there is: read a sequence of
+group elements, report the product. It has no ambiguity, no distributional shift, and a correct
+solution is exact at \emph{every} length, because a model that solves it has represented a
+homomorphism. It is also the task on which the expressive limits of modern recurrent architectures
+are most sharply drawn --- diagonal or element-wise transitions cannot represent a non-commutative
+group at all~\citep{merrill2024,sarrof2024}, which is the observation that motivated negative
+eigenvalues~\citep{grazzi2024} and products of Householder reflections~\citep{siems2025} as
+transition parameterisations, and which connects the architecture question to a classical one about
+bounded-width computation~\citep{barrington1986}.
 
-The claim of this paper is that this is what failure looks like for this architecture, that it can be
-verified rather than inferred from a coincidence of four numbers, and that the same algebra predicts a
-second, apparently unrelated limitation of the same layer.
+This paper is about what such a model does when it \emph{fails}. Train a reflection transport on the
+word problem of $S_4$ and one of two things happens. It reaches $1.000$ and stays there as the
+evaluation length grows to eight times the training length. Or it settles on one of a small set of
+values --- $0.250$, $0.083$, $0.042$ --- and stays there just as stably. Those are $1/4$, $1/12$ and
+$1/24$, and the normal subgroups of $S_4$ have orders $1$, $4$ ($V_4$), $12$ ($A_4$) and $24$. The
+correspondence is not a coincidence: a model that has learned the quotient $G/N$ knows which coset of
+$N$ the answer lies in and can do no better than guess inside it, so its accuracy is exactly $1/|N|$.
 
-\paragraph{What makes it checkable.} Three things, in increasing strength.
-\begin{enumerate}[leftmargin=*,itemsep=2pt]
-  \item \textbf{Flatness.} A homomorphism is length-independent. Every claim below is scored at a
-        length far beyond training, and runs whose accuracy drifts with length are excluded rather
-        than scored: they are not homomorphisms and the law says nothing about them.
+Failure, in other words, is quantised, and the allowed levels are fixed by the normal subgroup
+lattice of the group --- an object the model never sees. We call these levels \emph{rungs}. The
+contribution of this paper is to make that statement checkable rather than suggestive, and then to
+show that the algebra which explains it also predicts a second, apparently unrelated limitation of
+the same layer.
+
+\paragraph{Contributions.}
+\begin{itemize}[leftmargin=*,itemsep=1.5pt,topsep=3pt]
+  \item \textbf{A proven ceiling} (Section~\ref{sec:ceiling}) that separates commuting from
+        non-commuting transports by a bound no training can move, computed exactly by enumeration,
+        and a measurement of the reflection transport against it.
+  \item \textbf{The lattice law} (Section~\ref{sec:lattice}): across $Q_8$, $S_4$ and $A_5$, twelve
+        runs land on rungs of their own group with worst deviation $0.021$; the kernel is identified
+        independently from the model's \emph{errors} by coset consistency, and predicts the accuracy
+        on $5/5$ runs.
+  \item \textbf{A same-order control} (Section~\ref{sec:control}) that separates the lattice from the
+        group order, reported with its registered verdict --- which one run falsified.
+  \item \textbf{A table-free diagnostic} (Section~\ref{sec:char}): the character norm
+        $\langle\chi,\chi\rangle$ identifies the learned quotient from traces alone, with both
+        conditions under which it is valid stated and tested.
+  \item \textbf{Quotients as capability} (Section~\ref{sec:quotient}): when the task \emph{is} a
+        quotient, the same collapse is the correct answer, and the lattice law reappears one level
+        down, on the rungs of $S_4/V_4\cong S_3$ and $S_4/A_4\cong\mathbb{Z}_2$.
+  \item \textbf{The same invariant governs binding} (Section~\ref{sec:binding}): the normalised trace
+        that names the quotient is also what sets how much the transport can store, tying a
+        state-tracking result to an associative-memory one.
+\end{itemize}
+
+\paragraph{What makes the law checkable.} Three things, in increasing strength, each used below.
+\begin{enumerate}[leftmargin=*,itemsep=2pt,topsep=3pt]
+  \item \textbf{Flatness.} A homomorphism is length-independent. Every claim below is scored far
+        beyond the training length, and runs whose accuracy drifts with length are reported as such
+        rather than scored against the law.
   \item \textbf{Coset consistency.} If the model learned $G/N$, its \emph{errors} must respect
         cosets: predicted and true element in the same coset of $N$, essentially always. A model that
         is merely bad has no reason to respect any coset.
@@ -64,6 +105,42 @@ second, apparently unrelated limitation of the same layer.
         output can only be a function of the multiset of inputs; the best such function is computable
         by enumeration and is a hard bound.
 \end{enumerate}
+
+Every derived quantity in this paper --- the ceiling, the rung sets, the attainable character norms
+--- is recomputed from the group definitions by a single script, which also re-reads the measured
+tables from the raw logs rather than trusting a transcription.
+
+% ======================================================================================
+\section{Related work}
+
+\paragraph{State tracking in linear recurrences.} That a linear RNN with diagonal, positive
+transitions cannot track non-commutative state is by now well
+established~\citep{merrill2024,sarrof2024,deletang2023chomsky}, and two repairs are directly relevant
+here. Grazzi et al.~\cite{grazzi2024} show that allowing eigenvalues in $[-1,1]$ --- in our parameterisation,
+$\beta>1$ --- restores parity and related tasks; Siems et al.~\cite{siems2025} generalise the DeltaNet
+transition~\citep{yang2024delta,yang2024gated} to a product of $n_h$ Householder reflections per
+token, which by the Cartan--Dieudonn\'e theorem~\citep{artin1957} can reach any orthogonal map for
+$n_h\ge d$. Our transport is that construction, and $n_h$ is the knob whose two ends
+Section~\ref{sec:binding} argues are different jobs. Where that line of work measures \emph{which
+tasks become solvable}, we measure \emph{what the solution degrades to} when it does not, which turns
+out to carry more structure than a scalar accuracy.
+
+\paragraph{Groups as a probe of computation.} Using group word problems to characterise a
+computational model is classical: Barrington~\cite{barrington1986} shows that width-5 branching programs over
+$S_5$ capture $\mathrm{NC}^1$ exactly, and non-solvability is the pivotal property. The same
+solvability boundary organises what shallow sequence models can
+learn~\citep{liu2023shortcuts,deletang2023chomsky}, and Krohn--Rhodes decomposition~\citep{krohn1965}
+gives the semigroup-theoretic version. We use groups differently: not to place the architecture in a
+complexity class, but because the normal subgroup lattice supplies a discrete set of \emph{predicted}
+failure values, which makes a negative result falsifiable.
+
+\paragraph{Representations and characters.} That a learned transport is a representation, and can be
+analysed as one, is the premise of Section~\ref{sec:char}. The tools --- character norms,
+multiplicities, kernels of irreps --- are standard~\citep{serre1977,fultonharris1991}. Orthogonal and
+unitary recurrent networks have a long history~\citep{arjovsky2016,mhammedi2017}, and Householder
+products in particular were introduced there as a parameterisation of the orthogonal
+group~\citep{householder1958,bischof1987}; what is new here is reading the learned map through its
+character to recover which quotient the model settled on, without access to the group table.
 
 % ======================================================================================
 \section{Setup}
@@ -119,22 +196,24 @@ many times each element occurs, so the prediction is a function of $M$. The best
 returns, for each $M$, the most probable product, which is the stated sum.
 \end{proof}
 
-The bound is computable by enumeration, and at $L=8$ we evaluate it exactly over all $1287$ multisets
-of six elements: $C(\mathbb{Z}_6,8)=1.0000$ and $C(S_3,8)=0.3850$. The pair is matched in order, so a
+The bound is computable, and we evaluate it exactly wherever enumeration is feasible. At $L=8$ over
+all $1287$ multisets of six elements, $C(\mathbb{Z}_6,8)=1.0000$ and $C(S_3,8)=0.3850$; over the
+$6435$ multisets of eight, $C(Q_8,8)=0.5323$. The $S_3$/$\mathbb{Z}_6$ pair is matched in order, so a
 transport that clears $0.385$ on $S_3$ has done something order-sensitive, and nothing about the size
 of the group can explain it away.
 
 \begin{table}[H]\centering\small
-\caption{Matched-order test at $L=8$, three seeds. The ceiling is proven, not fitted. Commuting
-transports sit on it; the reflection transport passes it on $S_3$.}
+\caption{Matched-order test at $L=8$, three seeds each. The ceiling is proven, not fitted. Commuting
+transports sit on it; the reflection transport of Section~\ref{sec:setup} passes it on two seeds of
+three. Group-law violations for the reflection rows are $\le0.005$, so those runs are homomorphisms.}
 \begin{tabular}{llcc}
 \toprule
 transport & commuting? & $\mathbb{Z}_6$ & $S_3$ \\
 \midrule
 diagonal rotation & yes & $1.000\pm0.000$ & $0.388\pm0.006$ \\
 single Givens     & yes & $1.000\pm0.000$ & $0.389\pm0.003$ \\
-Householder product ($n_h=4$) & no & $1.000$ & $0.778$ \\
-butterfly         & no  & $1.000\pm0.000$ & $0.779\pm0.380$ \\
+Givens butterfly  & no  & $1.000\pm0.000$ & $0.779\pm0.380$ \\
+\textbf{Householder product} ($n_h=4$) & no & $\mathbf{1.000\pm0.000}$ & $\mathbf{0.780\pm0.382}$ \\
 transformer       & --- & $0.166\pm0.004$ & $0.167\pm0.003$ \\
 \midrule
 \textit{proven ceiling for any commuting transport} & & $1.000$ & $\mathbf{0.385}$ \\
@@ -143,30 +222,121 @@ transformer       & --- & $0.166\pm0.004$ & $0.167\pm0.003$ \\
 \label{tab:ceiling}
 \end{table}
 
-Two honest qualifications. The $\pm0.380$ on the butterfly row is a spread across seeds wide enough
-that some seeds solve the task and others fail below the ceiling; the mean exceeding $0.385$ says the
-ceiling \emph{can} be passed, not that it reliably is. And clearing the ceiling on $S_3$ does not
-imply clearing it everywhere: on the same ladder the reflection transport reaches $0.374$ on $Q_8$
-against a ceiling of $0.544$, $0.085$ on $A_4$ against $0.286$, and chance on $S_4$ and $A_5$. Being
-non-commuting removes a ceiling; it does not supply an optimiser that finds what lies above it. The
-rest of this paper is about where those runs land instead.
+\begin{figure}[t]\centering
+\begin{tikzpicture}
+  \begin{axis}[
+      width=12.6cm, height=5.4cm, xbar, bar width=4.6mm,
+      xmin=0, xmax=1.02, xtick={0,0.385,0.6,0.8,1.0},
+      xticklabels={0,0.385,0.6,0.8,1.0},
+      ymin=0.25, ymax=6.6, ytick={1,2,3,4,5},
+      yticklabels={transformer, diagonal rotation, single Givens, Givens butterfly,
+                   \textbf{Householder} product},
+      tick label style={font=\scriptsize}, ylabel style={font=\small},
+      xlabel={accuracy on the $S_3$ word problem at $L=8$}, xlabel style={font=\small},
+      nodes near coords, nodes near coords style={font=\scriptsize,
+        /pgf/number format/fixed, /pgf/number format/precision=3, /pgf/number format/fixed zerofill},
+      axis line style={soft}, y tick label style={align=right},
+    ]
+    \addplot[draw=soft, fill=soft!25, bar shift=0pt] coordinates {(0.167,1)};
+    \addplot[draw=meas!70, fill=meas!20, bar shift=0pt] coordinates {(0.388,2) (0.389,3)};
+    \addplot[draw=meas, fill=meas!55, bar shift=0pt] coordinates {(0.779,4) (0.780,5)};
+    \draw[rung, very thick] (axis cs:0.385,0.3) -- (axis cs:0.385,5.7);
+    \node[rung, font=\scriptsize, anchor=south] at (axis cs:0.385,5.72) {proven ceiling};
+    \draw[soft, dashed] (axis cs:0.167,0.3) -- (axis cs:0.167,5.7);
+    \node[soft, font=\scriptsize, anchor=south] at (axis cs:0.167,5.72) {chance};
+  \end{axis}
+\end{tikzpicture}
+\caption{\textbf{The ceiling is a theorem, not a baseline.} No commuting transport can exceed
+$0.385$ on $S_3$ at any width, depth or training budget, because its output can only depend on the
+multiset of inputs. The two commuting transports (light) sit exactly on it; the two non-commuting
+ones (dark) pass it. Dashed line: chance, $0.167$. The bars are means over three seeds, and the
+spread behind the two dark bars matters --- see the text.}
+\label{fig:ceiling}
+\end{figure}
+
+The reflection row is the transport this paper is about, measured here rather than inherited: an
+earlier ladder in this project reported a non-commuting arm on $S_3$ at $0.778$, but that arm is a
+Givens butterfly read out through an MLP, not a reflection transport, and it is listed above as such.
+
+The $\pm0.382$ is the interesting part. It is not noise around a mean: the three seeds return
+$1.000$, $0.339$, $1.000$. Two solve $S_3$ outright, and the third sits on $1/3$ --- which is a rung
+of $S_3$, whose normal subgroups have orders $1,3,6$. So the seed that does not clear the ceiling has
+not failed randomly; it has learned the quotient $S_3/\mathbb{Z}_3\cong\mathbb{Z}_2$ and is guessing
+within a coset of size three. That is the phenomenon of Section~\ref{sec:lattice} appearing already
+in the ceiling experiment, and it explains why the butterfly mean ($0.779$) and the reflection mean
+($0.780$) agree so closely: both are two solves and one collapse to the same rung, not two
+measurements of one underlying accuracy.
+
+Being non-commuting removes a ceiling; it does not supply an optimiser that reaches above it. The
+rest of this paper is about where the runs that fall short actually land.
 
 % ======================================================================================
 \section{The lattice law}
 \label{sec:lattice}
 
-A transport that ends training with a small group-law penalty is a homomorphism $\rho: G\to O(d)$
-composed with a readout. Its kernel $N=\ker\rho$ is a normal subgroup, elements of the same coset of
-$N$ are indistinguishable to it, and its accuracy is therefore $1/|N|$. The set of achievable
+A transport that ends training with a small group-law penalty is a homomorphism $\rho: G\to GL(d)$
+composed with a readout --- $GL$ rather than $O$, since $\beta$ is free and a learned transport need
+not stay orthogonal. Its kernel $N=\ker\rho$ is a normal subgroup, elements of the same coset of $N$
+are indistinguishable to it, and its accuracy is therefore $1/|N|$. The set of achievable
 accuracies is thus the set $\{1/|N| : N \trianglelefteq G\}$ --- the \emph{rungs} --- which is a
 property of the group alone and is invisible to the model. We enumerate the normal subgroups of each
 group directly (unions of conjugacy classes closed under the product) rather than quoting them:
 $S_4$ gives orders $1,4,12,24$; $Q_8$, being Hamiltonian, gives $1,2,4,4,4,8$; $A_5$, being simple,
 gives only $1,60$.
 
+\begin{figure}[t]\centering
+\begin{tikzpicture}[font=\small]
+  % ---- left: the normal subgroup lattice of S_4 and the rung it implies
+  \begin{scope}[xshift=0cm]
+    \node[font=\small\bfseries] at (1.3,5.1) {normal subgroups of $S_4$};
+    \foreach \y/\n/\o/\r in {0/$1$/1/1.000, 1.3/$V_4$/4/0.250, 2.6/$A_4$/12/0.083, 3.9/$S_4$/24/0.042}{
+      \node[draw, rounded corners=2pt, fill=meas!8, minimum width=14mm, minimum height=6mm] (n\o) at (0,\y) {\n};
+      \node[anchor=west, soft, font=\scriptsize] at (0.85,\y) {$|N|=\o$};
+      \node[anchor=west, rung, font=\small] at (2.15,\y) {$1/|N|=\r$};
+    }
+    \draw[-{Latex[length=2mm]}, soft] (n1) -- (n4);
+    \draw[-{Latex[length=2mm]}, soft] (n4) -- (n12);
+    \draw[-{Latex[length=2mm]}, soft] (n12) -- (n24);
+    \node[soft, font=\scriptsize, rotate=90, anchor=south] at (-0.75,1.95) {more collapsed};
+  \end{scope}
+  % ---- right: where the runs actually land
+  \begin{scope}[xshift=6.6cm]
+    \begin{semilogyaxis}[
+        width=8.4cm, height=5.9cm, ymin=0.011, ymax=1.6,
+        xmin=0.3, xmax=3.7, xtick={1,2,3}, xticklabels={$Q_8$,$S_4$,$A_5$},
+        ytick={0.017,0.042,0.083,0.125,0.25,0.5,1.0},
+        yticklabels={0.017,0.042,0.083,0.125,0.250,0.500,1.000},
+        ylabel={accuracy at $L=96$ (log scale)}, ylabel style={font=\small},
+        tick label style={font=\scriptsize}, grid=none, axis line style={soft},
+      ]
+      % rungs as short horizontal guides, per group
+      \foreach \x/\v in {1/1.0, 1/0.5, 1/0.25, 1/0.125}{
+        \addplot[rung, thick, dashed] coordinates {(\x-0.34,\v) (\x+0.34,\v)};}
+      \foreach \x/\v in {2/1.0, 2/0.25, 2/0.083, 2/0.042}{
+        \addplot[rung, thick, dashed] coordinates {(\x-0.34,\v) (\x+0.34,\v)};}
+      \foreach \x/\v in {3/1.0, 3/0.017}{
+        \addplot[rung, thick, dashed] coordinates {(\x-0.34,\v) (\x+0.34,\v)};}
+      % measured runs
+      \addplot[only marks, mark=*, mark size=1.9pt, meas] coordinates {
+        (0.78,0.241) (0.93,0.521) (1.08,1.000) (1.23,0.243)
+        (1.78,1.000) (1.93,0.100) (2.08,0.251) (2.23,0.259)
+        (2.78,0.020) (2.93,0.021) (3.08,0.014) (3.23,0.016)};
+    \end{semilogyaxis}
+  \end{scope}
+\end{tikzpicture}
+\caption{\textbf{Failure is quantised onto the normal subgroup lattice.} Left: the normal subgroups
+of $S_4$ form a chain, and each one $N$ implies an achievable accuracy $1/|N|$ for a model that has
+learned $G/N$. Right: every one of twelve trained runs (\textcolor{meas}{$\bullet$}) lands on a rung
+(\textcolor{rung}{dashed}) of its own group. $Q_8$ is Hamiltonian, so every subgroup is normal and it
+has a rung at $0.500$ that $S_4$ does not; $A_5$ is simple, so it has no rung between $0.017$ and
+$1.000$ and nothing may appear there. The model is never shown the lattice.}
+\label{fig:lattice}
+\end{figure}
+
 \begin{table}[H]\centering\small
-\caption{Four seeds per group. Every run is flat, so every run is a candidate homomorphism, and every
-one lands on a rung of its own group. Worst deviation across all twelve runs: $0.021$.}
+\caption{Four seeds per group. Every run is length-flat, and every one lands on a rung of its own
+group. Worst deviation across all twelve runs: $0.021$. Flatness is a necessary condition, not a
+demonstration of mechanism --- that is what Table~\ref{tab:coset} supplies.}
 \begin{tabular}{lcccc}
 \toprule
 group (rungs) & seed & $L=12$ & $L=96$ & nearest rung (dev.) \\
@@ -197,6 +367,10 @@ falsifier for $A_5$ --- a flat accuracy strictly between $0.017$ and $1.000$, wh
 forbids --- was not triggered, but neither did any $A_5$ run solve the task, so the group contributes
 a consistency check rather than a positive result. The load is carried by the intermediate rungs that
 are neither chance nor perfect: $Q_8$ at $0.500$ and $0.250$, and $S_4$ at $0.250$ and $0.083$.
+
+The table also does not record a group-law violation per run, so for its chance-level rows we do not
+claim a homomorphism was learned at all; the claim is about where runs land, and the mechanism is
+established separately, on the intermediate $S_4$ runs, below.
 
 \paragraph{Coset consistency.} Accuracy alone could be a numerical coincidence, so we test the
 mechanism on the errors. If a model learned $G/N$, its predictions must land in the correct coset of
@@ -233,6 +407,7 @@ is identified by coset consistency instead.
 
 % ======================================================================================
 \section{The same-order control}
+\label{sec:control}
 
 The cross-group evidence is confounded by group order, since a 24-element problem and an 8-element
 problem differ in chance level as well as in lattice. The control removes it: $S_4$ and $\mathrm{SL}(2,3)$
@@ -292,10 +467,13 @@ that solves the $V_4$ task exactly (Section~\ref{sec:quotient}) decomposes as tw
 trivial irrep plus the $2$-dimensional one, giving $\langle\chi,\chi\rangle = 2^2+1^2 = 5$ with
 kernel $V_4$, as the table requires.
 
-Finally, the diagnostic does not work as a training signal. An arm that adds a penalty driving the
+Finally, the diagnostic is better at certifying than at training. Adding a penalty that drives the
 mean squared trace toward $2.0$ --- no table, no labels, nothing but traces --- solved 2 of 6 seeds
-against 3 of 6 for the unregularised baseline. It certifies a representation; it does not produce
-one.
+against 3 of 6 for the unregularised baseline, so the table-free form does not help. A
+character-\emph{table} penalty, which supplies the target multiplicities and is therefore not
+table-free, solved 5 of 6. The distinction matters: knowing the target representation helps
+optimisation, but the trace norm alone, which is all one can measure without the group, does not
+supply it.
 
 % ======================================================================================
 \section{The same invariant governs binding}
@@ -317,6 +495,57 @@ reflections gives overlap $\approx e^{-2k/d}$. Measured at head dimension 64, wi
 and no training, capacity follows the trace exactly: four associations are recalled at $0.453$ with
 $k=2$ and at $1.000$ with $k=32\approx d/2$.
 
+\begin{figure}[t]\centering
+\begin{tikzpicture}
+  \begin{axis}[
+      name=left, width=7.4cm, height=5.2cm, xmode=log, log basis x=2,
+      xmin=0.85, xmax=56, ymin=0, ymax=1.05,
+      xtick={1,2,4,8,16,32,48}, xticklabels={1,2,4,8,16,32,48},
+      xlabel={$k$ reflections}, ylabel={expected overlap $\mathbb{E}[\bv^\top g\,\bv]$},
+      xlabel style={font=\small}, ylabel style={font=\small},
+      tick label style={font=\scriptsize}, axis line style={soft},
+      legend style={font=\scriptsize, draw=soft, at={(0.97,0.97)}, anchor=north east},
+    ]
+    \addplot[rung, very thick, no marks, domain=0.85:56, samples=90] {exp(-2*x/64)};
+    \addlegendentry{$e^{-2k/d}$, $d=64$}
+    \addplot[meas, only marks, mark=*, mark size=1.9pt] coordinates {
+      (1,0.968) (2,0.945) (4,0.872) (8,0.777) (16,0.602) (32,0.358) (48,0.218)};
+    \addlegendentry{measured}
+    \draw[soft, dashed] (axis cs:2,0) -- (axis cs:2,0.945);
+    \node[soft, font=\scriptsize, anchor=west, align=left] at (axis cs:2.4,0.20)
+      {tracking\\regime ($k=2$)};
+  \end{axis}
+  \begin{axis}[
+      at={(left.east)}, xshift=12mm, anchor=west,
+      width=7.4cm, height=5.2cm, xmode=log, log basis x=2,
+      xmin=0.85, xmax=56, ymin=0, ymax=1.05,
+      xtick={1,2,4,8,16,32,48}, xticklabels={1,2,4,8,16,32,48},
+      xlabel={$k$ reflections}, ylabel={recall accuracy},
+      xlabel style={font=\small}, ylabel style={font=\small},
+      tick label style={font=\scriptsize}, axis line style={soft},
+      legend style={font=\scriptsize, draw=soft, at={(0.03,0.97)}, anchor=north west},
+    ]
+    \addplot[meas, thick, mark=*, mark size=1.7pt] coordinates {
+      (1,0.373) (2,0.453) (4,0.573) (8,0.807) (16,0.953) (32,1.000) (48,0.993)};
+    \addlegendentry{4 pairs}
+    \addplot[rung, thick, mark=square*, mark size=1.5pt] coordinates {
+      (1,0.187) (2,0.200) (4,0.233) (8,0.480) (16,0.673) (32,0.853) (48,0.933)};
+    \addlegendentry{8 pairs}
+    \draw[soft, dashed] (axis cs:0.85,0.25) -- (axis cs:56,0.25);
+    \draw[soft, dashed] (axis cs:0.85,0.125) -- (axis cs:56,0.125);
+    \node[soft, font=\scriptsize, anchor=west] at (axis cs:16,0.19) {chance};
+  \end{axis}
+\end{tikzpicture}
+\caption{\textbf{One knob, two jobs.} Left: the expected overlap of a vector with its image under a
+product of $k$ random reflections follows $e^{-2k/d}$ to three decimals --- the normalised trace, a
+character. Right: associative recall capacity rises exactly as the overlap falls. A single
+reflection has $\operatorname{tr}=d-2$, the least-hiding non-trivial element of $O(d)$, so a
+transport tuned for state tracking ($k=2$, dashed) is at the worst possible point for binding, and
+one tuned for binding ($k\approx d/2$) is too destructive to compose across tokens. No training is
+involved: the weights are set by hand, $d=64$.}
+\label{fig:trace}
+\end{figure}
+
 So the same transport is a tracker at small $k$ and an associative store at $k\approx d/2$, and the
 character is what separates the regimes. A layer that composes group elements perfectly and cannot
 retain one fact among four is not exhibiting two unrelated limitations; it is at one end of a single
@@ -331,8 +560,8 @@ of $N$ and the same collapse becomes the correct answer: the $V_4$ task asks for
 the product ($6$ classes, chance $0.167$) and needs only $S_4/V_4\cong S_3$; the $A_4$ task asks for
 the $A_4$-coset ($2$ classes, chance $0.500$) and needs only $S_4/A_4\cong\mathbb{Z}_2$.
 
-Solve rates rise as the required group shrinks --- 2 of 4 seeds on the full task, 2 of 4 on $V_4$,
-3 of 4 on $A_4$ --- but the sharper result is where the \emph{failures} land. If the law of
+Solve rates are 2 of 4 seeds on the full task, 2 of 4 on $V_4$ and 3 of 4 on $A_4$ --- too few seeds
+to read a trend from --- but the sharper result is where the \emph{failures} land. If the law of
 Section~\ref{sec:lattice} is really about the group being learned, then on a quotient task it should
 apply to the quotient, and the rungs should be those of $S_3$ and $\mathbb{Z}_2$ rather than those of
 $S_4$. The normal subgroups of $S_3$ have orders $1,3,6$, giving rungs $1.000$, $0.333$, $0.167$;
@@ -381,5 +610,34 @@ clean instance rather than across the table.
 Every derived quantity above --- the ceiling, the rung sets, the attainable character norms --- is
 recomputed from the group definitions by \texttt{evidence/verify\_paperB.py}, which also re-reads the
 measured tables from the result files rather than trusting a transcription.
+
+% ======================================================================================
+\section{Conclusion}
+
+A trained reflection transport that fails a group word problem does not produce an arbitrary number.
+It produces $1/|N|$ for a normal subgroup $N$, having learned the quotient $G/N$ --- and this is
+verifiable three ways: the accuracy lands on a rung (worst deviation $0.021$ over twelve runs), the
+\emph{errors} independently identify the same $N$ by coset consistency, and a matched-order control
+separates the lattice from the group order. The failure is a compression onto an exact algebraic
+object, not a partial approximation of the right one.
+
+Two consequences seem worth carrying further. First, the collapse is only a failure relative to a
+task that demands the full group; when the target is itself a quotient, the same behaviour is correct,
+and the lattice law reappears on the smaller group's rungs. Real sequence modelling rarely requires
+distinguishing states with identical continuations, so the set of legal compressions may be a more
+useful description of a recurrent layer than its accuracy on a task that forbids all of them.
+Second, the invariant that names the quotient --- the normalised trace --- is the same quantity that
+bounds how much the transport can bind and store. Tracking and storage are not two mechanisms in
+this architecture but two ends of one knob, and a layer that composes group elements perfectly while
+failing to retain a single fact is exhibiting one property, not two failures.
+
+The main limitation is scale: small groups, small dimensions, four seeds. The law is a statement
+about where this architecture lands when it fails, and whether the same quantisation governs larger
+groups, deeper stacks, or transports trained without an explicit group-law penalty is open.
+
+% ======================================================================================
+\small
+\bibliographystyle{plain}
+\bibliography{refs}
 
 \end{document}

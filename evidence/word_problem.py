@@ -16,8 +16,14 @@ coincidences, the RUNG SET is a property of the group, which the model cannot se
 
 Falsifier: any stable, length-flat accuracy on A_5 strictly between 0.017 and 1.000.
 
-Kernel is measured directly, not assumed: cluster the learned transports and read
-|ker| = |G| / (number of distinct transports). Predicted accuracy is then 1/|ker|.
+WITHDRAWN -- the |ker| column this script prints is INVALID, and paper B does not use it.
+It clusters M[g] = mean over random h of T(h,g); T is linear and h is zero-mean, so M[g]
+is a Monte-Carlo zero for every g and the clustering runs on sampling noise. On an
+UNTRAINED model, whose |G| transports are independent random draws and whose true kernel
+is trivial, it reports |ker| = 8. See evidence/verify_paperB.py part 7 for the
+demonstration. The replacement is COSET CONSISTENCY (evidence/lattice.py, paper B
+Section 4), which identifies the kernel from the model's errors. The accuracy columns
+below are sound; the |ker| and 1/|ker| columns are not.
 """
 import itertools, time, torch, torch.nn as nn, torch.nn.functional as F
 
