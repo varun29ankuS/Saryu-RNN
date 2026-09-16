@@ -57,7 +57,11 @@ the write is convex, the state is provably bounded. The recurrence is trained wi
 chunk-parallel kernel (an inverse-free triangular solve per chunk) and generates at a per-token cost
 independent of context length. This draft describes the architecture, the kernel, the design
 reasoning and the two models trained so far (5M and 25M parameters, character-level enwik8, trained
-at context 128, and measured to use about 512 characters of context and no more). It reports only Saryu's own measurements;
+at context 128, and measured to use about 512 characters of context and no more). It also identifies what this transport cannot do and why: the expected overlap of a state with its
+image under an orthogonal map is the normalised trace, a single Householder has trace $d-2$ --- the
+least-hiding non-trivial element of the orthogonal group --- and $k$ reflections give overlap
+$e^{-2k/d}$, so the same operation that tracks at $k=2$ stores associations only near $k\approx d/2$.
+It reports only Saryu's own measurements;
 matched comparisons against other architectures are the subject of the next version.
 \end{abstract}
 
@@ -615,6 +619,70 @@ is kept for many tokens and edited softly. The model thus uses the full range th
 --- reflections with fast turnover low in the stack, gentle long-lived memory at the top --- rather than
 collapsing to one regime.
 
+\subsection{What the transport cannot do: binding is a character}
+\label{sec:binding}
+
+The same model that composes an ordered 48-step chain perfectly at every length (1.000, flat to a
+distance of 144 tokens) cannot retrieve one key--value pair out of four at any gap, at any learning
+rate: the loss sits at $\ln 64$ for 2000 steps. The reason is a trace identity, and it also explains
+why the failure gets \emph{worse} as the model is made wider.
+
+For an orthogonal map $g$ acting on the sphere, the expected overlap of a random unit vector with its
+image is the normalised trace,
+\begin{equation}
+  \mathbb{E}\,[\,\mathbf{v}^\top g\,\mathbf{v}\,] = \operatorname{tr}(g)/d ,
+  \label{eq:trace}
+\end{equation}
+so \emph{how much a binding operation hides a value is a character}. Writing $g\in O(d)$ by its
+rotation angles, $\operatorname{tr}(g)=\sum_i 2\cos\theta_i$: a single Householder has one angle at
+$\pi$ and the rest at zero, giving $\operatorname{tr}=d-2$ and overlap $1-2/d$ ($0.978$ at $d=93$),
+while a phase rotation or a permutation has $\operatorname{tr}\approx0$ and overlap $\approx 0$. A
+reflection is thus the least-hiding non-trivial element of the whole group. A product of $k$
+reflections multiplies the expected trace by $(1-2/d)$ each time, so
+\begin{equation}
+  \mathbb{E}\,[\,\mathbf{v}^\top g_k\,\mathbf{v}\,] \;\approx\; e^{-2k/d} .
+  \label{eq:decay}
+\end{equation}
+
+\begin{table}[t]
+\centering\small
+\begin{tabular}{@{}rccccc@{}}
+\toprule
+$k$ & measured overlap & $e^{-2k/d}$ & 4-pair recall & 8-pair recall \\
+\midrule
+1  & 0.968 & 0.969 & 0.373 & 0.187 \\
+2  & 0.945 & 0.939 & 0.453 & 0.200 \\
+4  & 0.872 & 0.882 & 0.573 & 0.233 \\
+8  & 0.777 & 0.779 & 0.807 & 0.480 \\
+16 & 0.602 & 0.607 & 0.953 & 0.673 \\
+32 & 0.358 & 0.368 & \textbf{1.000} & 0.853 \\
+48 & 0.218 & 0.223 & 0.993 & \textbf{0.933} \\
+\midrule
+\multicolumn{3}{r}{chance} & 0.250 & 0.125 \\
+\bottomrule
+\end{tabular}
+\caption{Binding by $k$ reflections at head dimension $64$, weights set by hand and no training.
+Overlap follows Eq.~\ref{eq:decay} to three decimals, and capacity follows the overlap: the same
+mechanism that stores nothing at $k=2$ stores four associations perfectly at $k=32$. Verified
+independently at $d=32$ and $d=128$ across three seeds, and against exact traces of the assembled
+product.}
+\label{tab:trace}
+\end{table}
+
+Table~\ref{tab:trace} measures both sides. Capacity tracks the trace, so \emph{transport and binding
+are one operation at two ends of one knob}: small $k$ gives near-identity nudges that compose across
+tokens, and $k\approx d/2$ gives a near-Haar isometry that conceals a value until the matching key
+returns. Saryu runs $n_h=2$ at head dimension 40 and 93, i.e.\ $2k/d\approx0.04$ --- the extreme
+tracking end --- which is why it composes perfectly and stores nothing. DeltaProduct introduced $n_h$
+as a state-tracking expressivity knob~\cite{siems2025}; Eq.~\ref{eq:decay} says it is simultaneously
+the binding-capacity knob, and that the two regimes are different jobs for the same parameter.
+
+Two costs are real. Storage heads are $O(kd)$ per token, so $k\approx d/2$ costs $O(d^2)$ --- the
+compute of a matrix-state memory, though the state itself stays $O(d)$ per head. And the kernel's
+per-chunk system is $(Cn_h)\times(Cn_h)$, so $n_h=32$ at chunk 8 solves $256\times256$ rather than
+$16\times16$; the kernel remains exact at those sizes (measured $7\times10^{-6}$ against the
+step-by-step recurrence), so no new kernel is required.
+
 % ======================================================================================
 \section{Where Saryu goes next}
 \label{sec:next}
@@ -626,38 +694,54 @@ and a transformer --- with several seeds, a second corpus,
 state-tracking tasks, and throughput. The design questions above (Section~\ref{sec:why}) are
 only settled once those numbers exist.
 
-\paragraph{A fused kernel.} The chunkwise kernel is exact but written in plain PyTorch with a loop over
-chunks. A fused GPU kernel is needed before training at larger scale.
+\paragraph{The chunk size, then perhaps a fused kernel.} The kernel is exact for \emph{any} chunk
+size, so the chunk is a free performance knob, and on a T4 it is worth a great deal: one 25M layer's
+forward and backward at context 512 falls from 131\,ms at chunk 8 to 21\,ms at chunk 64, taking a
+whole training step from 695\,ms to 300\,ms, with differences at floating-point noise. That also
+weakens the case for hand-writing a fused kernel: at the shipped chunk the recurrence was 35--73\% of
+a step, and at the best chunk it is 17--53\%.
 
-\paragraph{A memory for facts.} Saryu's state is small by design: $d$ numbers per layer. That suits
-tracking \emph{where} a sequence is, but it cannot store many independent facts, which is what
-associative-recall tasks measure~\cite{arora2023zoology}. The intended full Saryu adds a matrix memory
-next to the tracker (Figure~\ref{fig:memory}): a delta-rule store~\cite{yang2024delta} with $\beta<1$ (no
-reflections inside the store, where a reflection would invert a superseded fact), addressed by content
-bound to the tracked state. A first version exists but does not train: because the tracker moves at
-every token, a fact written under one state is queried under a different one and the addresses never
-match. The planned fix is a tracker that changes state only when a token should change it.
+\paragraph{Storage: more reflections, not a second memory.} An earlier version of this draft proposed
+adding a matrix memory beside the tracker, on the assumption that a vector state cannot hold many
+independent facts~\cite{arora2023zoology}. Section~\ref{sec:binding} shows that assumption was wrong
+in an instructive way. The state stores associations perfectly well; what fails is the binding
+operator, because a single reflection hides almost nothing. Raising $n_h$ for a subset of heads fixes
+it with the operator already in the architecture, no second state and no second kernel
+(Figure~\ref{fig:memory}). The design that follows is heterogeneous: tracking heads at $n_h=2$, where
+near-identity transports compose across tokens, and storage heads at $n_h\approx d/4$ to $d/2$, where
+the transport is close to Haar-random and conceals a value until its key returns.
+
+Two things that this does \emph{not} fix are worth stating. Recall still decays with distance
+(0.234 at gap 0 against 0.062 at gap 64 under a curriculum), because the transport rotates the stored
+superposition between write and read --- a frame drift that more reflections do not address. And at
+$\beta=2$ the recurrence is a measure-preserving map of a compact sphere, so by Poincar\'e recurrence
+it must return arbitrarily close to earlier states: more reflections buy separation, not escape.
+Escaping needs dissipation ($\beta<1$), a non-compact state space, or a dimension high enough that the
+recurrence time $\sim\epsilon^{-d}$ is irrelevant.
 
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[node distance=6mm]
   \node[font=\small] (x) {token features $\bz_t$};
-  \node[blk, fill=mixc, above left=8mm and 4mm of x, minimum width=34mm] (trk) {state tracker\\{\scriptsize reflections, $\beta\approx2$ (this paper)}};
-  \node[blk, fill=memc, above right=8mm and 4mm of x, minimum width=34mm] (mem) {matrix memory $S$\\{\scriptsize delta rule, $\beta<1$}};
-  \node[blk, fill=statec, above=8mm of trk] (addr) {address = content $\otimes$ state};
-  \node[blk, fill=normc, above=8mm of mem] (read) {read $S\,\mathbf{k}$};
-  \coordinate (mid) at ($(addr.north)!0.5!(read.north)$);
-  \node[font=\small, above=6mm of mid] (out) {to the residual stream};
+  \node[blk, fill=mixc, above left=9mm and 6mm of x, minimum width=42mm] (trk)
+    {tracking heads, $n_h=2$\\{\scriptsize overlap $e^{-2k/d}\approx0.96$: near-identity nudges}\\
+     {\scriptsize composes across tokens --- this paper}};
+  \node[blk, fill=memc, above right=9mm and 6mm of x, minimum width=42mm] (mem)
+    {storage heads, $n_h\approx d/2$\\{\scriptsize overlap $\approx0.37$: near-Haar isometry}\\
+     {\scriptsize conceals a value until its key returns}};
+  \coordinate (mid) at ($(trk.north)!0.5!(mem.north)$);
+  \node[blk, fill=statec, above=10mm of mid, minimum width=52mm] (st)
+    {one vector state per head, one kernel\\{\scriptsize same operator, same recurrence, $O(d)$ state}};
+  \node[font=\small, above=7mm of st] (out) {to the residual stream};
   \draw[arr] (x) -| (trk); \draw[arr] (x) -| (mem);
-  \draw[arr] (trk) -- (addr); \draw[arr] (addr) -- node[above, font=\scriptsize] {key} (read);
-  \draw[arr] (mem) -- (read); \draw[arr] (read) |- (out);
-  \begin{scope}[on background layer]
-    \node[draw, dashed, rounded corners, fit=(trk)(mem)(addr)(read)(out), inner sep=3mm,
-      label={[font=\scriptsize, gray, anchor=north west]north west:planned --- not yet trained}] {};
-  \end{scope}
+  \draw[arr] (trk) |- (st); \draw[arr] (mem) |- (st); \draw[arr] (st) -- (out);
+  \node[font=\scriptsize, gray, right=3mm of x] {$n_h$ sets the trace, the trace sets the job};
 \end{tikzpicture}
-\caption{The intended full Saryu layer: the reflection tracker of this paper plus a matrix memory for
-facts, addressed by content bound to the tracked state. Not part of the trained models.}
+\caption{What the trace law implies for the design. Rather than bolting a matrix memory beside the
+tracker, the same reflection transport does both jobs at two settings of $n_h$: tracking where the
+transport is nearly the identity, storage where it is nearly Haar-random. One operator, one exact
+kernel, and the state stays a vector. An earlier version of this draft proposed the matrix memory
+instead; Section~\ref{sec:binding} is why it is not needed.}
 \label{fig:memory}
 \end{figure}
 
