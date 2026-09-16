@@ -1,19 +1,24 @@
 # Saryu
 
 **A recurrent language model whose state is moved by Householder reflections.**
+**Open architecture research, built in India.**
 
 [![Website](https://img.shields.io/badge/website-saryu-0f6d82.svg)](https://varun29ankuS.github.io/Saryu-RNN/)
-[![Paper: draft v1](https://img.shields.io/badge/paper-draft%20v1-e08a1e.svg)](paper/main.pdf)
+[![Paper A](https://img.shields.io/badge/paper%20A-architecture-e08a1e.svg)](paper/main.pdf)
+[![Paper B](https://img.shields.io/badge/paper%20B-quantised%20failure-8a6fd4.svg)](paper/paperB.pdf)
 [![Weights: v0.1](https://img.shields.io/badge/weights-v0.1-orange.svg)](https://github.com/varun29ankuS/Saryu-RNN/releases/tag/v0.1)
 [![Tests](https://github.com/varun29ankuS/Saryu-RNN/actions/workflows/tests.yml/badge.svg)](https://github.com/varun29ankuS/Saryu-RNN/actions/workflows/tests.yml)
+[![Made in India](https://img.shields.io/badge/made%20in-India-ff9933.svg)](#about-this-project)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c.svg)](https://pytorch.org)
 
 [Website](https://varun29ankuS.github.io/Saryu-RNN/) ·
+[What the research found](#what-the-research-found) ·
 [Why it is built this way](#why-it-is-built-this-way) ·
 [Results](#results-character-level-enwik8) ·
 [Quickstart](#quickstart) ·
-[Paper](paper/main.pdf) ·
+[Paper A](paper/main.pdf) ·
+[Paper B](paper/paperB.pdf) ·
 [Evidence](evidence/) ·
 [Status](#status-and-next-steps)
 
@@ -24,6 +29,52 @@ input-dependent Householder transforms, then a gate mixes in new content:
 
 The state has a fixed size, so writing a token costs the same whether the context is ten characters
 or ten million. The 25M model carries 11,904 numbers of state in total.
+
+## About this project
+
+Saryu is an independent, open research project built in India. It is named after the Saryu, the
+river of the Suryavansh lineage, and the sun over the river is its mark.
+
+The aim is to work on a frontier question rather than at frontier scale: *what can a fixed-size
+recurrent state actually represent, and what does it do when it cannot?* The trained models here are
+small (5M and 25M parameters, character-level) and are research instruments, not a product — the
+[results table](#results-character-level-enwik8) says plainly what they do and do not show. What is
+meant to be competitive is the evidence: every design choice is settled by an experiment that is
+committed before it runs and reported whichever way it comes out, including when that means
+retracting a number we had already published.
+
+## What the research found
+
+Two technical reports. [Paper A](paper/main.pdf) is the architecture; [Paper B](paper/paperB.pdf) is
+what the same transport does when it fails, which turned out to be the more interesting half.
+
+**Failure is quantised.** Train this transport on the word problem of a finite group and it either
+solves it exactly at any length, or it lands on `1/|N|` for a normal subgroup `N` — it has learned
+the quotient `G/N`, gets the coset right, and guesses inside it. Across Q₈, S₄ and A₅, twelve runs
+land on a rung of their own group, worst deviation 0.021. The lattice is a property of the group,
+and the model never sees it ([`evidence/word_problem.py`](evidence/word_problem.py)).
+
+**The errors name the subgroup, not just its size.** Q₈ has three *different* normal subgroups of
+order 4, so accuracy alone cannot tell them apart — all three give the same 0.250. Coset consistency
+picks exactly one, and scores the other two at the predicted 0.5
+([`evidence/which_subgroup.py`](evidence/which_subgroup.py)).
+
+**Binding capacity is a character.** For an orthogonal map, the expected overlap of a vector with
+its image is the normalised trace, `E[v·gv] = tr(g)/d`. A single Householder reflection has
+`tr = d−2` — the *least* hiding non-trivial element of O(d) — and k of them give overlap
+`(1−2/d)^k`. So the same knob, reflections per token, is state tracking at one end and associative
+memory at the other, and Saryu's `n_h = 2` sits at the tracking extreme
+([`evidence/trace_law.py`](evidence/trace_law.py)).
+
+**A trained transport can be read as a representation.** Its character norm `⟨χ,χ⟩`, computed from
+traces alone with no group table and no labels, identifies which quotient it learned. Over sixteen
+seeds it agrees with the independent error-based reading on all seven runs that are genuine
+homomorphisms ([`evidence/character_table.py`](evidence/character_table.py)).
+
+Every derived number in Paper B — the bounds, the rung sets, the attainable character norms — is
+recomputed from the group definitions by
+[`evidence/verify_paperB.py`](evidence/verify_paperB.py), which also re-reads the measured tables
+from the raw logs rather than trusting a transcription.
 
 ## Why it is built this way
 
@@ -64,10 +115,16 @@ rescaling factors stay below e^8.1.
 unit lower-triangular solve per chunk and no matrix inverse. It matches the step-by-step
 recurrence to float precision, and [`tests/`](tests/) check that on every run.
 
-**A small vector state, with facts left to a separate memory.** A vector per head is cheap and
-suits tracking *where* a sequence is. It cannot hold many independent facts, so that job is
-planned for a matrix memory addressed by the tracked state ([`experimental/memory/`](experimental/memory/)),
-which does not train yet.
+**A small vector state, tuned for tracking rather than storage.** A vector per head is cheap and
+suits tracking *where* a sequence is. At `n_h = 2` it holds almost no independent facts, and we
+first assumed the fix was a separate matrix memory
+([`experimental/memory/`](experimental/memory/), still untrained). The trace law says otherwise:
+the shortfall is not the vector state but the *number of reflections*, since a single reflection
+hides a value least of any non-trivial orthogonal map. Storage needs `n_h ≈ d_h/2`, which is the
+same mechanism at a different setting rather than a second memory
+([`evidence/trace_law.py`](evidence/trace_law.py)). That predicts a heterogeneous layer — tracking
+heads at `n_h = 2` beside storage heads at `n_h ≈ d_h/2` — which is
+[not yet built](#status-and-next-steps).
 
 **The block around the transport.** Normalisation, a width-4 causal convolution, per-head
 RMSNorm, a SiLU output gate and a SwiGLU feed-forward surround the recurrence. This surrounding
@@ -137,19 +194,33 @@ scripts/talk.py         text completion from the 5M checkpoint
 scripts/serve.py        streaming web UI that shows the state while it writes (--selftest)
 tests/                  kernel exactness, norm preservation, order sensitivity, checkpoint loading
 evidence/               the small experiments behind each design choice, with their result logs
+  word_problem.py         group word problems: the rung structure of trained transports
+  which_subgroup.py       Q_8, where three normal subgroups share one rung and the errors must choose
+  character_table.py      reading a trained transport as a representation, from traces alone
+  trace_law.py            binding capacity is a character: overlap ~ (1-2/d)^k
+  verify_paperB.py        recomputes every derived number in paper B from the group definitions
 experimental/memory/    the matrix-memory extension (not trained yet; see its README)
-paper/                  technical report, draft v1: the architecture, the kernel, the trained models
+paper/main.pdf          report A: the architecture, the kernel, the trained models
+paper/paperB.pdf        report B: what the transport does when it cannot solve a group
 checkpoints/            saryu_25m.pt, saryu_v4b_last.pt  (release v0.1, not in git)
 corpus/                 enwik8                            (not in git)
 ```
 
 ## Status and next steps
 
-- **Works:** the reflection recurrence at 5M and 25M parameters, the exact kernel, the demos.
+- **Works:** the reflection recurrence at 5M and 25M parameters, the exact kernel, the demos, and
+  the group-theoretic results in [Paper B](paper/paperB.pdf).
 - **Next:** matched comparisons against other recurrent and attention models at larger scale, with
-  several seeds and a second corpus; a fused GPU kernel (the current one is plain PyTorch).
-- **Planned:** the matrix memory for facts, which first needs a tracker that changes state only
-  when a token should change it.
+  several seeds and a second corpus — the single biggest gap, and the reason no competitive claim is
+  made here. Also a fused GPU kernel; the current one is plain PyTorch, though chunk size alone
+  already buys 2.3–5.4× and is exact at any size.
+- **Open:** the heterogeneous layer the trace law predicts — tracking heads at `n_h = 2` beside
+  storage heads at `n_h ≈ d_h/2`. `n_h` is now a constructor argument, so this is testable; whether
+  a *trained* model uses the capacity is being measured in
+  [`evidence/nh_sweep.py`](evidence/nh_sweep.py).
+- **Known limits:** the trained models stop using context at about 512 characters; two of the four
+  rows of Paper B's character table have no qualifying run behind them; A₅'s rung coincides with
+  chance, so those runs confirm the lattice law without demonstrating it.
 
 ## Citation
 
@@ -158,7 +229,15 @@ corpus/                 enwik8                            (not in git)
   author = {Varun Sharma},
   title  = {Saryu: a recurrent language model whose state is carried by Householder reflections},
   year   = {2026},
-  note   = {Technical report, draft v1},
+  note   = {Technical report A, draft v1},
+  url    = {https://github.com/varun29ankuS/Saryu-RNN}
+}
+
+@misc{sharma2026quantised,
+  author = {Varun Sharma},
+  title  = {Quantised failure: trained reflection transports collapse onto exact group quotients},
+  year   = {2026},
+  note   = {Technical report B, draft v1},
   url    = {https://github.com/varun29ankuS/Saryu-RNN}
 }
 ```

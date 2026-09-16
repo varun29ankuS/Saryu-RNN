@@ -1,0 +1,37 @@
+WHICH SUBGROUP, NOT JUST WHICH ORDER:  Q_8
+n_h=4 d=4 2000 steps, 10 seeds
+
+Normal subgroups found by closure (6), all normal since Q_8 is Hamiltonian:
+     {1}  order 1  rung 1.000   {1}
+    <-1>  order 2  rung 0.500   {1, -1}
+     <i>  order 4  rung 0.250   {1, i, -1, -i}
+     <j>  order 4  rung 0.250   {1, j, -1, -j}
+     <k>  order 4  rung 0.250   {1, k, -1, -k}
+     Q_8  order 8  rung 0.125   {1, i, j, k, -1, -i, -j, -k}
+
+The three order-4 subgroups share the rung 0.250, so accuracy cannot separate them.
+Predicted for a 0.250 run: correct 1.000, other two order-4 0.500, <-1> 0.500.
+
+ sd   L=12   L=96   g-law      {1}    <-1>     <i>     <j>     <k>     Q_8
+--------------------------------------------------------------------------
+  0  0.201  0.234  0.0059    0.230   0.488   1.000   0.488   0.488   1.000   (294s)
+  1  0.553  0.479  0.0060    0.482   1.000   1.000   1.000   1.000   1.000   (316s)
+  2  1.000  1.000  0.0039    1.000   1.000   1.000   1.000   1.000   1.000   (103s)
+  3  0.270  0.254  0.1595    0.262   0.504   0.504   1.000   0.504   1.000   (330s)
+  4  0.229  0.297  0.0051    0.279   0.510   0.510   0.510   1.000   1.000   (337s)
+  5  0.525  0.506  0.0049    0.525   1.000   1.000   1.000   1.000   1.000   (205s)
+  6  0.506  0.512  0.1238    0.504   1.000   1.000   1.000   1.000   1.000   (54s)
+  7  0.270  0.260  0.0046    0.219   0.477   0.477   1.000   0.477   1.000   (44s)
+  8  0.463  0.535  0.0046    0.516   1.000   1.000   1.000   1.000   1.000   (45s)
+  9  0.229  0.246  0.0055    0.248   0.514   0.514   0.514   1.000   1.000   (50s)
+
+Runs on the 0.250 rung that are also homomorphisms (g-law < 0.02): 3
+  sd0: identified ['<i>'], others [0.488, 0.488]  -> P1 ok, P2 ok
+  sd7: identified ['<j>'], others [0.477, 0.477]  -> P1 ok, P2 ok
+  sd9: identified ['<k>'], others [0.514, 0.514]  -> P1 ok, P2 ok
+
+  P1 exactly one order-4 subgroup above 0.95: 3/3
+  P2 the other two within 0.10 of 0.500:      3/3
+  P3 subgroups actually chosen across seeds: ['<i>', '<j>', '<k>'] (3 distinct)
+
+  VERDICT: NOT falsified

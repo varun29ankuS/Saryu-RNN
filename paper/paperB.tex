@@ -412,6 +412,41 @@ raw acc. & $1$ & $V_4$ & $A_4$ & $S_4$ & identified $N$ & $1/|N|$ \\
 \label{tab:coset}
 \end{table}
 
+\paragraph{The law names a subgroup, not an order.} Everything above is consistent with a weaker
+claim than the one we are making. The value $1/|N|$ depends only on the \emph{order} of $N$, so a
+model that merely collapsed by some factor dividing $|G|$ would produce the same table. Separating
+the two needs a group with several distinct normal subgroups of the same order, and $Q_8$ is one:
+being Hamiltonian, every subgroup is normal, and it has three of order four,
+$\langle i\rangle$, $\langle j\rangle$, $\langle k\rangle$, which share the single rung $0.250$.
+Accuracy cannot tell them apart. The errors can.
+
+The prediction is sharper than ``one of them scores $1.000$'', because the wrong subgroups have a
+computable score. If the model learned $Q_8/\langle i\rangle$ it guesses uniformly within a
+four-element coset of $\langle i\rangle$, and each such coset splits exactly half-and-half across the
+two cosets of $\langle j\rangle$ --- so $\langle j\rangle$ must score $0.5$, not chance and not one.
+
+\begin{table}[H]\centering\small
+\caption{Ten seeds on $Q_8$; the three that land on the $0.250$ rung as homomorphisms. Exactly one
+order-4 subgroup is identified in each, the other two sit at the predicted $0.5$, and across seeds
+all three subgroups occur --- so the choice is not an artefact of how the group was indexed.}
+\begin{tabular}{lcccccc}
+\toprule
+seed & $L=96$ & $\{1\}$ & $\langle -1\rangle$ & $\langle i\rangle$ & $\langle j\rangle$ & $\langle k\rangle$ \\
+\midrule
+0 & 0.234 & 0.230 & 0.488 & \textbf{1.000} & 0.488 & 0.488 \\
+7 & 0.260 & 0.219 & 0.477 & 0.477 & \textbf{1.000} & 0.477 \\
+9 & 0.246 & 0.248 & 0.514 & 0.514 & 0.514 & \textbf{1.000} \\
+\midrule
+\textit{predicted} & $0.250$ & $0.250$ & $0.500$ & \multicolumn{3}{c}{$1.000$ for one, $0.500$ for the other two} \\
+\bottomrule
+\end{tabular}
+\label{tab:whichsub}
+\end{table}
+
+The registered falsifier --- a rung run in which two or more order-4 subgroups score above $0.95$,
+or none does --- was not triggered. What the model learns is a quotient by a particular subgroup,
+and the accuracy is only the shadow that subgroup's order casts.
+
 \paragraph{A measurement we withdraw.} Our earlier runs also reported a per-run kernel size, obtained
 by clustering the transports $M[g]=\mathbb{E}_\bh\,T_g\bh$ and setting $|\ker| = |G|/(\#\text{clusters})$.
 That estimator is invalid: $T_g$ is linear and $\bh$ is zero-mean, so $M[g]$ is a Monte-Carlo zero for

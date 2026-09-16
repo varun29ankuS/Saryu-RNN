@@ -233,14 +233,21 @@ class SaryuV3LM(nn.Module):
     kind = 'saryu-v3'
 
     def __init__(self, vocab, d, nl, use_vemb=False, timescales=False, write_scale=False,
-                 gate_w_scale=0.01, freeze_gate_bias=False, gate_ceiling=False, chunk=CHUNK):
+                 gate_w_scale=0.01, freeze_gate_bias=False, gate_ceiling=False, chunk=CHUNK,
+                 nh=NH, H=NHH):
+        """nh (reflections per head) and H default to the trained configuration, so the released
+        checkpoints load unchanged. They are exposed because nh is the knob the trace law is about
+        (evidence/results/trace_law.txt): overlap ~ exp(-2 nh / dh), so nh trades state tracking
+        against binding capacity. Nothing could vary it here before, which meant the law had never
+        been tested in a trained language model -- see evidence/nh_sweep.py."""
         super().__init__()
         self.emb = nn.Embedding(vocab, d)
         nn.init.normal_(self.emb.weight, std=0.02)
         self.vemb = nn.Embedding(vocab, d) if use_vemb else None
         if self.vemb is not None:
             nn.init.normal_(self.vemb.weight, std=0.02)
-        self.mix = nn.ModuleList([SaryuV3Block(d, timescales=timescales, write_scale=write_scale,
+        self.mix = nn.ModuleList([SaryuV3Block(d, nh=nh, H=H,
+                                               timescales=timescales, write_scale=write_scale,
                                                gate_w_scale=gate_w_scale, chunk=chunk,
                                                freeze_gate_bias=freeze_gate_bias,
                                                gate_ceiling=gate_ceiling)
@@ -271,6 +278,10 @@ def load_checkpoint(path, map_location='cpu'):
                                                                if k.startswith('mix.')}),
                       use_vemb='vemb.weight' in st,
                       write_scale='mix.0.w_raw' in st,   # timescales only affect init, not the keys
-                      gate_ceiling='mix.0.g_max' in st)
+                      gate_ceiling='mix.0.g_max' in st,
+                      # v_proj maps d -> nh*d, so the saved shape names nh; H comes from the
+                      # per-head gate. Read off the weights so a non-default sweep reloads.
+                      nh=st['mix.0.v_proj.weight'].shape[0] // ck['d'],
+                      H=st['mix.0.g_proj.weight'].shape[0])
     model.load_state_dict(st)
     return model, ck
