@@ -2,10 +2,11 @@
 
 **A recurrent language model whose state is moved by Householder reflections.**
 
+[![Website](https://img.shields.io/badge/website-saryu-0f6d82.svg)](https://varun29ankuS.github.io/saryu/)
+[![Paper: draft v1](https://img.shields.io/badge/paper-draft%20v1-e08a1e.svg)](paper/main.pdf)
+[![Weights: v0.1](https://img.shields.io/badge/weights-v0.1-orange.svg)](https://github.com/varun29ankuS/saryu/releases/tag/v0.1)
 [![Tests](https://github.com/varun29ankuS/saryu/actions/workflows/tests.yml/badge.svg)](https://github.com/varun29ankuS/saryu/actions/workflows/tests.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
-[![Weights: v0.1](https://img.shields.io/badge/weights-v0.1-orange.svg)](https://github.com/varun29ankuS/saryu/releases/tag/v0.1)
-[![Paper: draft v1](https://img.shields.io/badge/paper-draft%20v1-lightgrey.svg)](paper/main.pdf)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c.svg)](https://pytorch.org)
 
 [Website](https://varun29ankuS.github.io/saryu/) ·
