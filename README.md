@@ -2,14 +2,14 @@
 
 **A recurrent language model whose state is moved by Householder reflections.**
 
-[![Website](https://img.shields.io/badge/website-saryu-0f6d82.svg)](https://varun29ankuS.github.io/saryu/)
+[![Website](https://img.shields.io/badge/website-saryu-0f6d82.svg)](https://varun29ankuS.github.io/Saryu-RNN/)
 [![Paper: draft v1](https://img.shields.io/badge/paper-draft%20v1-e08a1e.svg)](paper/main.pdf)
-[![Weights: v0.1](https://img.shields.io/badge/weights-v0.1-orange.svg)](https://github.com/varun29ankuS/saryu/releases/tag/v0.1)
-[![Tests](https://github.com/varun29ankuS/saryu/actions/workflows/tests.yml/badge.svg)](https://github.com/varun29ankuS/saryu/actions/workflows/tests.yml)
+[![Weights: v0.1](https://img.shields.io/badge/weights-v0.1-orange.svg)](https://github.com/varun29ankuS/Saryu-RNN/releases/tag/v0.1)
+[![Tests](https://github.com/varun29ankuS/Saryu-RNN/actions/workflows/tests.yml/badge.svg)](https://github.com/varun29ankuS/Saryu-RNN/actions/workflows/tests.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](LICENSE)
 [![PyTorch](https://img.shields.io/badge/PyTorch-2.x-ee4c2c.svg)](https://pytorch.org)
 
-[Website](https://varun29ankuS.github.io/saryu/) ·
+[Website](https://varun29ankuS.github.io/Saryu-RNN/) ·
 [Why it is built this way](#why-it-is-built-this-way) ·
 [Results](#results-character-level-enwik8) ·
 [Quickstart](#quickstart) ·
@@ -82,8 +82,8 @@ of its 28 scored failures missed the registered tolerance, and it says so.
 
 ## Results (character-level enwik8)
 
-Bits per character on the last 128 characters of 64 random evaluation windows of each context
-length (the windows are drawn separately for each length, so columns score different characters).
+Bits per character on the last 128 characters of 64 evaluation windows. Every window *ends* at the
+same position, so each context length scores identical text with more or less of it in front.
 Every model was trained at context 128. Lower is better.
 
 | model | params | train steps | ctx 128 | ctx 512 | ctx 2048 | ctx 8192 |
@@ -112,9 +112,9 @@ Reading it honestly:
 Requires Python 3.10+.
 
     pip install -r requirements.txt
-    gh release download v0.1 --repo varun29ankuS/saryu -D checkpoints
+    gh release download v0.1 --repo varun29ankuS/Saryu-RNN -D checkpoints
     # or without the GitHub CLI:
-    mkdir -p checkpoints && for f in saryu_25m.pt saryu_v4b_last.pt; do curl -L -o checkpoints/$f https://github.com/varun29ankuS/saryu/releases/download/v0.1/$f; done
+    mkdir -p checkpoints && for f in saryu_25m.pt saryu_v4b_last.pt; do curl -L -o checkpoints/$f https://github.com/varun29ankuS/Saryu-RNN/releases/download/v0.1/$f; done
 
     python -m pytest tests
     python scripts/talk.py "The history of India begins with "
@@ -159,7 +159,7 @@ corpus/                 enwik8                            (not in git)
   title  = {Saryu: a recurrent language model whose state is carried by Householder reflections},
   year   = {2026},
   note   = {Technical report, draft v1},
-  url    = {https://github.com/varun29ankuS/saryu}
+  url    = {https://github.com/varun29ankuS/Saryu-RNN}
 }
 ```
 
