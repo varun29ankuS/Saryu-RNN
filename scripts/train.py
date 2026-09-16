@@ -262,6 +262,7 @@ WRITE_SCALE = os.environ.get('WRITE_SCALE', '0') == '1'
 # not swamped; 1.0 reproduces the first (invalid) attempt
 GATE_W_SCALE = float(os.environ.get('GATE_W_SCALE', 0.01))
 FREEZE_GATE_BIAS = os.environ.get('FREEZE_GATE_BIAS', '0') == '1'
+GATE_CEILING = os.environ.get('GATE_CEILING', '0') == '1'
 # chunk size is exact at any value; 32-64 is 3-6x faster than 8 on a T4 (evidence/results/
 # kernel_profile.txt). The released checkpoints were trained at 8.
 CHUNK_TRAIN = int(os.environ.get('CHUNK', 32))
@@ -270,7 +271,7 @@ CHUNK_TRAIN = int(os.environ.get('CHUNK', 32))
 def _ctor(vocab, width, nl):
     return SaryuV3LM(vocab, width, nl, timescales=TIMESCALES, write_scale=WRITE_SCALE,
                      gate_w_scale=GATE_W_SCALE, freeze_gate_bias=FREEZE_GATE_BIAS,
-                     chunk=CHUNK_TRAIN)
+                     gate_ceiling=GATE_CEILING, chunk=CHUNK_TRAIN)
 
 
 for name, mode, arm_lr, arm_seed in ARMS:

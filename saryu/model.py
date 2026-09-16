@@ -109,7 +109,7 @@ class SaryuV3Block(nn.Module):
     USE_KERNEL = True    # NaN-guard can flip this to the sequential path
 
     def __init__(self, d, nh=NH, H=NHH, timescales=False, write_scale=False, gate_w_scale=0.01,
-                 freeze_gate_bias=False, chunk=CHUNK):
+                 freeze_gate_bias=False, gate_ceiling=False, chunk=CHUNK):
         """timescales / write_scale are OFF by default: the defaults are the trained configuration,
         so the released checkpoints load and reproduce exactly. They address the measured limit that
         the trained models stop using context at about 512 characters
@@ -139,8 +139,8 @@ class SaryuV3Block(nn.Module):
         nn.init.constant_(self.b_proj.bias, math.pi)
         self.g_proj = nn.Linear(d, H)                            # PER-HEAD scalar cos gate
         nn.init.constant_(self.g_proj.bias, 0.4)
+        gh = torch.logspace(math.log10(0.5), math.log10(1e-4), H)   # the per-head timescale ladder
         if timescales:                       # g = (1-cos phi)/2, so phi = arccos(1-2g)
-            gh = torch.logspace(math.log10(0.5), math.log10(1e-4), H)
             with torch.no_grad():
                 self.g_proj.bias.copy_(torch.arccos(1.0 - 2.0 * gh))
                 # The ladder lives in the bias, and the default input term erases it: at width 144
@@ -149,6 +149,13 @@ class SaryuV3Block(nn.Module):
                 # retaining 2-4 tokens (evidence/results/gate_timescales.txt). Shrinking the input
                 # term lets each head start at its own timescale and learn to modulate around it.
                 self.g_proj.weight.mul_(gate_w_scale)
+        # A HARD per-head ceiling on the gate. Initialising the ladder (attempt 2) and freezing it
+        # (attempt 3) both failed: training moved the bias, then grew the input weights instead, so
+        # every head ended at 2-3 tokens of retention either way. With this on, head h can never
+        # exceed g_h, so its retention can only be LONGER than the ladder -- the model cannot route
+        # around it. If the effective context still stops at ~256, long memory is useless to the
+        # model on this task and the gate is not the thing to fix.
+        self.register_buffer('g_max', gh.clone() if gate_ceiling else None)
         if freeze_gate_bias:
             # attempt 2 gave heads retentions of 2 to 11,011 tokens and training collapsed every one
             # of them to 2-3 within 1000 steps (evidence/results/gate_timescales.txt). Freezing the
@@ -169,6 +176,8 @@ class SaryuV3Block(nn.Module):
         u = F.normalize(self.v_proj(z).view(B, L, self.H, self.nh, self.dh), dim=-1)
         beta = 1.0 - torch.cos(self.b_proj(z).view(B, L, self.H, self.nh))
         g = ((1.0 - torch.cos(self.g_proj(z))) / 2.0).clamp(max=0.90)   # alpha-underflow guard
+        if self.g_max is not None:
+            g = torch.minimum(g, self.g_max)          # per-head ceiling: retention can only grow
         cz = self.c_proj(z)
         if ve is not None:                      # value embeds into the write
             cz = cz + ve
@@ -212,7 +221,7 @@ class SaryuV3LM(nn.Module):
     kind = 'saryu-v3'
 
     def __init__(self, vocab, d, nl, use_vemb=False, timescales=False, write_scale=False,
-                 gate_w_scale=0.01, freeze_gate_bias=False, chunk=CHUNK):
+                 gate_w_scale=0.01, freeze_gate_bias=False, gate_ceiling=False, chunk=CHUNK):
         super().__init__()
         self.emb = nn.Embedding(vocab, d)
         nn.init.normal_(self.emb.weight, std=0.02)
@@ -221,7 +230,8 @@ class SaryuV3LM(nn.Module):
             nn.init.normal_(self.vemb.weight, std=0.02)
         self.mix = nn.ModuleList([SaryuV3Block(d, timescales=timescales, write_scale=write_scale,
                                                gate_w_scale=gate_w_scale, chunk=chunk,
-                                               freeze_gate_bias=freeze_gate_bias)
+                                               freeze_gate_bias=freeze_gate_bias,
+                                               gate_ceiling=gate_ceiling)
                                   for _ in range(nl)])
         self.ffn = nn.ModuleList([SwiGLU(d) for _ in range(nl)])
         self.lnf = nn.LayerNorm(d)
@@ -248,6 +258,7 @@ def load_checkpoint(path, map_location='cpu'):
     model = SaryuV3LM(st['emb.weight'].shape[0], ck['d'], len({k.split('.')[1] for k in st
                                                                if k.startswith('mix.')}),
                       use_vemb='vemb.weight' in st,
-                      write_scale='mix.0.w_raw' in st)   # timescales only affect init, not the keys
+                      write_scale='mix.0.w_raw' in st,   # timescales only affect init, not the keys
+                      gate_ceiling='mix.0.g_max' in st)
     model.load_state_dict(st)
     return model, ck

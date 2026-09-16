@@ -74,3 +74,37 @@ THREE WAYS ON, in increasing cost:
    only ~250 characters. A synthetic long-range task (recall at distance) would separate "cannot"
    from "need not".
 3. The matrix memory in experimental/memory/, which stores facts outside the decaying state.
+
+================================================================================================
+ATTEMPT 3: LADDER FROZEN -- STILL NEGATIVE. THE MODEL ROUTED AROUND IT.
+Same setup plus FREEZE_GATE_BIAS=1, so g_proj.bias cannot move and the ladder cannot be unlearned.
+
+                                  bpc@128   bpc@512     effective context (probe)
+base (both off)                    2.2035    2.1404     frozen by 256 characters
+timescales, frozen ladder          2.2166    2.1517     frozen by 256 characters
+timescales + write scale, frozen   2.1856    2.1130     frozen by 256 characters
+
+RETENTION AFTER TRAINING, arm frz:
+  layer 0  from the frozen bias alone:  2   7  23  77  260  877  2962  10001 tokens
+           actual, on real text:        2   2   2   2    2    2     3      3 tokens
+           |g_proj.weight| row norms: 0.32 0.39 0.53 0.58 0.59 0.69 0.61 0.63  (init was ~0.008)
+  layer 3  actual:                      2   4   7   9   11   20    69    157 tokens
+
+The bias held -- it is frozen, and reading it back gives the ladder exactly. Training grew the
+INPUT term instead, from row norms of ~0.008 at initialisation to 0.25-0.69, which is enough to
+swamp a 0.03-radian bias and drag every head back to 2-3 tokens. Given long memory three different
+ways, the model removed it three different ways:
+
+  attempt 1  ladder only in the parameter, erased by the input term from the start
+  attempt 2  ladder correct in the function; training moved the bias
+  attempt 3  bias frozen; training grew the input weights
+
+NOTE, not a claim: the frozen + write-scale arm posted the best loss of any arm here
+(2.1856 / 2.1130 against the baseline's 2.2035 / 2.1404). That is inside the +-0.02 seed spread
+measured at this size (optimizer_local.txt), so it needs seeds before it means anything.
+
+ATTEMPT 4, now the only way left to force the issue: a HARD per-head ceiling, g_h <= ladder_h, so
+retention can only be LONGER than the ladder and the model cannot route around it at all. If the
+effective context STILL stops at ~256 characters with heads that are structurally incapable of
+forgetting quickly, then long memory is useless to this model on this task, and the gate is not
+what to fix -- the write rule or the task is. That is a 20-minute run and it closes the question.
