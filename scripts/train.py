@@ -157,16 +157,35 @@ def sized(ctor, vocab, target, nl, lo=64, hi=2048):
     return best
 
 
+def eval_ends(va, seed=99):
+    """Scoring positions shared by every context length.
+
+    A window of length L ENDS at one of these positions, so each L scores the SAME final
+    SCORE_LAST characters with more or less context in front of them. (Until 2026-09-16 the window
+    STARTS were drawn per length, so the columns of the results table scored different characters
+    and were only loosely comparable.)
+
+    The earliest position is set by EVAL_ANCHOR, not by the lengths this run happens to ask for, so
+    two runs are comparable even if one evaluates at fewer lengths."""
+    lo = int(os.environ.get('EVAL_ANCHOR', 8192)) + 1
+    if lo >= len(va) - 1:                      # tiny corpora (smoke runs)
+        lo = max(1, len(va) // 2)
+    ge = torch.Generator().manual_seed(seed)
+    return torch.randint(lo, len(va) - 1, (EVAL_WINDOWS,), generator=ge).tolist()
+
+
 @torch.no_grad()
-def bpc_at(m, va, L, g):
+def bpc_at(m, va, L, ends):
     m.eval()
+    if L > min(ends):
+        m.train()
+        return float('nan')                    # not enough text in front of the scoring positions
     per = max(1, min(32, 8192 // L))
     tot, ntok = 0.0, 0
-    starts = torch.randint(0, len(va) - L - 1, (EVAL_WINDOWS,), generator=g).tolist()
-    for i in range(0, len(starts), per):
-        ch = starts[i:i + per]
-        x = torch.stack([va[s:s + L] for s in ch]).to(DEV)
-        y = torch.stack([va[s + 1:s + L + 1] for s in ch]).to(DEV)
+    for i in range(0, len(ends), per):
+        ch = ends[i:i + per]
+        x = torch.stack([va[e - L:e] for e in ch]).to(DEV)
+        y = torch.stack([va[e - L + 1:e + 1] for e in ch]).to(DEV)
         lg = m(x)[:, -SCORE_LAST:]
         yy = y[:, -SCORE_LAST:]
         tot += float(F.cross_entropy(lg.reshape(-1, lg.shape[-1]), yy.reshape(-1),
@@ -219,17 +238,32 @@ def split_params(m):
     return twoD, rest
 
 
-ARMS = [('saryu-25M', 'adamw')]
+def parse_arms(spec, seeds):
+    """ARMS='adamw@1e-3,muon@0.02' with SEEDS='0,1,2' -> one arm per (setting, seed).
+
+    The learning rate after @ is AdamW's in adamw mode and Muon's in muon mode (where the
+    embeddings, the head and every 1-D parameter stay on AdamW at 1e-3, as Muon requires)."""
+    arms = []
+    for seed in [int(s) for s in seeds.split(',') if s.strip()]:
+        for item in [a for a in spec.split(',') if a.strip()]:
+            mode, _, lr = item.partition('@')
+            lr = float(lr) if lr else (0.02 if mode == 'muon' else 1e-3)
+            arms.append(('{}@{:g} s{}'.format(mode, lr, seed), mode, lr, seed))
+    return arms
+
+
+ARMS = (parse_arms(os.environ['ARMS'], os.environ.get('SEEDS', '0'))
+        if os.environ.get('ARMS') else [('saryu-25M', 'adamw', 1e-3, 0)])
 results = []
-for name, mode in ARMS:
+for name, mode, arm_lr, arm_seed in ARMS:
     d, n = sized(SaryuV3LM, V, TARGET_PARAMS, NL)
-    torch.manual_seed(0)
+    torch.manual_seed(arm_seed)
     m = SaryuV3LM(V, d, NL).to(DEV)
     if mode != 'old':
         modern_init(m, NL)
     if mode == 'old':
-        opt = torch.optim.AdamW(m.parameters(), lr=1e-3, weight_decay=0.01)
-        sch = torch.optim.lr_scheduler.OneCycleLR(opt, 1e-3, total_steps=STEPS,
+        opt = torch.optim.AdamW(m.parameters(), lr=arm_lr, weight_decay=0.01)
+        sch = torch.optim.lr_scheduler.OneCycleLR(opt, arm_lr, total_steps=STEPS,
                                                   pct_start=0.05)
         opt2 = None
     else:
@@ -237,16 +271,17 @@ for name, mode in ARMS:
         decay1d = [p for p in rest if p.ndim >= 2]
         nodecay = [p for p in rest if p.ndim < 2]
         opt = torch.optim.AdamW([{'params': decay1d, 'weight_decay': 0.01},
-                                 {'params': nodecay, 'weight_decay': 0.0}], lr=1e-3)
+                                 {'params': nodecay, 'weight_decay': 0.0}],
+                                lr=(1e-3 if mode == 'muon' else arm_lr))
         if mode == 'muon':
-            opt2 = Muon(twoD, lr=0.02, momentum=0.95, wd=0.01)
+            opt2 = Muon(twoD, lr=arm_lr, momentum=0.95, wd=0.01)
         else:
             opt.add_param_group({'params': twoD, 'weight_decay': 0.01})
             opt2 = None
         base_lrs = [g['lr'] for g in opt.param_groups]
         sch = torch.optim.lr_scheduler.LambdaLR(
             opt, lambda st: wsd_lambda(st, STEPS))
-    g = torch.Generator().manual_seed(1)
+    g = torch.Generator().manual_seed(1 + arm_seed)
     _start = 0
     _r = os.environ.get('RESUME')
     if _r and os.path.exists(_r):
@@ -287,7 +322,7 @@ for name, mode in ARMS:
         if opt2 is not None:
             fac = wsd_lambda(s, STEPS)
             for gg in opt2.param_groups:
-                gg['lr'] = 0.02 * fac
+                gg['lr'] = arm_lr * fac
             opt2.step()
         sch.step()
         done = s + 1
@@ -304,11 +339,11 @@ for name, mode in ARMS:
             print('  WALLCAP at {}'.format(done), flush=True)
             break
     ts = time.time() - t1
-    ge = torch.Generator().manual_seed(99)
+    ends = eval_ends(va)
     row = {}
     for L in EVAL_LENS:
         try:
-            row[L] = bpc_at(m, va, L, ge)
+            row[L] = bpc_at(m, va, L, ends)
         except RuntimeError as e:
             row[L] = float('nan')
             print('  L={} failed: {}'.format(L, str(e)[:80]), flush=True)
