@@ -1,0 +1,53 @@
+BINDING CAPACITY IS A CHARACTER: THE TRACE OF THE TRANSPORT SETS IT, AND n_h IS THE KNOB
+evidence/trace_law.py, 2026-09-16, CPU, no training.
+
+THE IDENTITY. For an orthogonal g acting on the sphere, E[v . g v] = tr(g)/d. So how much a binding
+operation HIDES a value is the normalised trace -- a character, the same object Paper B uses to
+identify which quotient a transport learned. Writing g by its rotation angles, tr = sum 2 cos
+theta_i:
+
+    one Householder    one angle pi, rest 0   tr = d - 2   overlap = 1 - 2/d   (0.978 at d=93)
+    phase rotation     every angle nonzero    tr ~ 0       overlap ~ 0
+    permutation        tr = fixed points      tr ~ O(1)    overlap ~ 0
+
+A single reflection is the least-hiding non-trivial element of the orthogonal group. That is the
+whole explanation of the recall failure, and of why it worsens with width: 1 - 2/d -> 1.
+
+THE LAW. k independent random reflections multiply the expected trace by (1 - 2/d) each, so
+overlap(k) ~ exp(-2k/d). Measured at head dimension 64:
+
+      k   overlap   exp(-2k/d)   4-pair recall   8-pair recall
+      1     0.968        0.969           0.373          0.187
+      2     0.945        0.939           0.453          0.200     <- Saryu (n_h = 2)
+      4     0.872        0.882           0.573          0.233
+      8     0.777        0.779           0.807          0.480
+     16     0.602        0.607           0.953          0.673
+     32     0.358        0.368           1.000          0.853     <- k = d/2
+     48     0.218        0.223           0.993          0.933
+   chance                                 0.250          0.125
+
+Agreement with exp(-2k/d) is to three decimals across the range. Capacity follows the trace: the
+SAME reflection mechanism that stores nothing at k=2 stores 4 facts perfectly at k=32 and 8 facts at
+0.853. No permutation, no phase binding and no matrix memory are required -- only a different point
+on this curve.
+
+THE UNIFICATION. Transport and binding are one operation at two ends of one knob.
+    k small  -> trace ~ d -> near-identity -> nudges that compose across tokens = TRACKING
+    k ~ d/2  -> trace ~ 0 -> near-Haar isometry -> values hidden, recoverable by key = STORAGE
+Saryu runs n_h = 2 at head dim 40 (5M) and 93 (25M): 2k/d ~ 0.04, the extreme tracking end. That is
+why it composes 48-step chains perfectly and cannot store one fact among four.
+DeltaProduct (2502.10297) introduced n_h as a state-tracking expressivity knob. It is also the
+binding-capacity knob; the two regimes are different jobs for the same parameter.
+
+COSTS, stated honestly.
+- k reflections are O(k d) per token, so k ~ d/2 is O(d^2) -- the same compute as a delta-rule
+  matrix memory. What is saved is STATE: O(d) per head instead of O(d^2), which matters at inference.
+- In the chunkwise kernel the per-chunk triangular system is (C n_h) x (C n_h), so n_h = 32 at chunk
+  8 means a 256 x 256 solve instead of 16 x 16. Storage heads will need a smaller chunk or their own
+  kernel path.
+- Poincare recurrence still applies: an isometry of a compact sphere must return near earlier states,
+  so larger k buys separation, not escape. Escaping needs dissipation (beta < 1), a non-compact or
+  hyperbolic state, or dimension high enough that the recurrence time ~ eps^-d is irrelevant.
+
+WHAT TO BUILD: heterogeneous heads. A few tracking heads at n_h = 2, a few storage heads at
+n_h ~ d/4 to d/2, one operator, one kernel, no matrix memory.

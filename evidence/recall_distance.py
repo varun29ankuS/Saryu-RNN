@@ -70,6 +70,7 @@ SEED = int(os.environ.get('SEED', 0))
 # seeds, jumping at step 1000-1500, and at lr 1e-3 -> below 0.21. The first run here used 1e-3 for
 # 800 steps, i.e. the rate that fails, stopped before the jump. LR is a knob for that reason.
 LR = float(os.environ.get('LR', 1e-3))
+CURRICULUM = os.environ.get('CURRICULUM', '0') == '1'
 NENT, NREL = 64, 4
 torch.set_num_threads(int(os.environ.get('THREADS', 8)))
 
@@ -101,10 +102,10 @@ def make_recall(rng, npairs, gap, seqlen, nent=NENT):
     return [pad] * (seqlen - len(seq)) + seq, int(vs[i]), dist
 
 
-def batch(rng, kind, arg, seqlen):
+def batch(rng, kind, arg, seqlen, npairs=None):
     xs, ys, ds = [], [], []
     while len(xs) < BS:
-        s = (make_recall(rng, NPAIRS, arg, seqlen) if kind == 'recall'
+        s = (make_recall(rng, npairs or NPAIRS, arg, seqlen) if kind == 'recall'
              else make_transport(rng, arg, NREL, seqlen, NENT, ordered=True))
         if s is None:
             continue
@@ -123,8 +124,19 @@ def run(kind, args, seqlen, label):
     t0 = time.time()
     every = max(1, STEPS // 8)
     for s in range(STEPS):
-        arg = args[s % len(args)]                 # interleave, so one model sees every distance
-        x, y, _ = batch(rng, kind, arg, seqlen)
+        if CURRICULUM and kind == 'recall':
+            # Boesch & Wee 2026 (2609.16183) take recall from 0.021 to 1.000 on an UNCHANGED
+            # architecture with a distance-based ramp: the wall they describe is sparse supervision,
+            # not capacity. Ramp both axes -- easy distances and few facts first -- then hold the
+            # full task for the last quarter so the model is finally trained on what it is scored on.
+            f = min(1.0, (s / STEPS) / 0.75)
+            npairs = 1 + int(f * (NPAIRS - 1))
+            arg = args[min(len(args) - 1, int(f * len(args)))]
+            arg = args[s % (args.index(arg) + 1)]          # sample among the unlocked distances
+        else:
+            npairs = NPAIRS
+            arg = args[s % len(args)]             # interleave, so one model sees every distance
+        x, y, _ = batch(rng, kind, arg, seqlen, npairs)
         loss = F.cross_entropy(m(x)[:, -1], y)
         opt.zero_grad(); loss.backward()
         torch.nn.utils.clip_grad_norm_(m.parameters(), 1.0)

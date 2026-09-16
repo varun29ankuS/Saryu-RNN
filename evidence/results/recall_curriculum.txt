@@ -1,0 +1,36 @@
+CURRICULUM BRIDGES THE OPTIMISATION CLIFF; WIDTH DOES NOTHING
+evidence/recall_distance.py, 2026-09-16, CPU. 4 pairs, 2 layers, 2000 steps, gaps 0/16/64,
+chance = 1/64 = 0.0156.
+
+LEARNABILITY LADDER (no curriculum), recall at gap 0 / 16 / 64:
+
+    pairs   lr 3e-4                 lr 1e-3                 lr 3e-3
+      1     1.000 1.000 0.859       1.000 1.000 1.000       1.000 1.000 0.023
+      4     0.023 0.008 0.016       0.016 0.016 0.008       0.016 0.008 0.023
+
+One fact is learned perfectly at every rate. Four facts never leave chance at any rate: the loss sits
+at 4.15 = ln 64 for all 2000 steps. The cliff between 1 and 4 is not a learning-rate artefact.
+
+CURRICULUM (ramp pairs 1->4 and distance over the first 75% of training) and WIDTH:
+
+    cell                              recall at gap 0 / 16 / 64
+    curriculum, head dim 16, 3e-4      0.234  0.188  0.062
+    curriculum, head dim 16, 1e-3      0.367  0.016  0.078
+    curriculum, head dim  8, 1e-3      0.336  0.000  0.031
+    curriculum, head dim 32, 1e-3      0.273  0.227  0.016
+    NO curriculum, head dim 32, 1e-3   0.031  0.016  0.023
+
+1. The curriculum is worth about 9x at identical width (0.273 against 0.031), so the cliff IS partly
+   an optimisation barrier, as Boesch & Wee 2026 (2609.16183) report for fixed-state recurrences.
+2. It stops at 0.23-0.37, which is at or just below the hand-built reflect-to-bind ceiling for these
+   widths (0.42-0.46, recall_by_construction.txt). Training now reaches the mechanism's limit instead
+   of failing to start.
+3. Width does nothing: 0.336 / 0.367 / 0.273 across head dims 8 / 16 / 32. A real associative memory
+   improves with width. This one cannot, because the binding overlap is 1 - 2/d, which gets WORSE as
+   d grows (trace_law.txt).
+4. Recall decays sharply with gap (0.234 -> 0.062) on top of the capacity ceiling, which the
+   construction does not model: the transport rotates the stored superposition between write and
+   read. Frame drift is a second, separate geometric cost.
+
+CONCLUSION: two walls, not one. The optimisation wall yields to a curriculum. The capacity wall is
+set by the trace of the binding operator and yields only to more reflections per token.
