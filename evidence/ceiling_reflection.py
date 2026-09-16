@@ -9,11 +9,20 @@ reflections would be wrong, and it was quoted that way in a draft of paper B bef
 
 So we measure the thing the paper is about: the exact transport of paper B Section 2 -- one learned
 reflection table per group element, n_h reflections per element, beta free, LINEAR readout, the
-group-law penalty -- on the matched pair (S_3, Z_6) at the length where the ceiling is proven.
+group-law penalty -- at the length where the ceiling is proven.
 
 THE COMPARISON. The abelian ceiling is a theorem, not a baseline: a transport whose elements commute
-cannot exceed it at any width, depth or training budget. At L = 8 it is exact by enumeration over
-all 1287 multisets -- 1.0000 on Z_6, 0.3850 on S_3 (recomputed in evidence/verify_paperB.py).
+cannot exceed it at any width, depth or training budget. At L = 8 it is exact by enumeration
+(recomputed in evidence/verify_paperB.py):
+
+    Z_6   1.0000   abelian, so the multiset already determines the product
+    S_3   0.3850   matched to Z_6 in order, so only NON-COMMUTATIVITY can separate them
+    Q_8   0.5323   a second group, because clearing the bound on one group is a thin result
+
+Q_8 matters for a second reason. Its normal subgroups have orders 1, 2, 4, 4, 4, 8, so its rungs are
+1.000, 0.500, 0.250, 0.125 -- and 0.500 sits just BELOW the 0.5323 ceiling. A run that learns the
+Z_2 quotient therefore lands a hair under a bound it did not have to obey, which is a place where
+the rung structure and the ceiling can be told apart.
 
     python evidence/ceiling_reflection.py
 Environment: NH, D, STEPS, SEEDS, LAM, L.
@@ -37,7 +46,11 @@ LAM = float(os.environ.get('LAM', 1.0))
 SEEDS = [int(s) for s in os.environ.get('SEEDS', '0,1,2').split(',')]
 torch.set_num_threads(int(os.environ.get('THREADS', 8)))
 
-CEILING = {'S_3': 0.3850, 'Z_6': 1.0000}       # exact, verify_paperB.py part 1
+# All three are EXACT, by enumeration over every word of length 8 (verify_paperB.py part 1):
+# 1287 multisets for the order-6 groups, 6435 for Q_8. The larger groups on the old ladder are
+# Monte-Carlo estimates and are deliberately not compared against here.
+CEILING = {'S_3': 0.3850, 'Z_6': 1.0000, 'Q_8': 0.5323}
+CHANCE = {'S_3': 1 / 6, 'Z_6': 1 / 6, 'Q_8': 1 / 8}
 
 
 def groups():
@@ -45,7 +58,16 @@ def groups():
     ix = {p: i for i, p in enumerate(p3)}
     s3 = [[ix[tuple(b[a[i]] for i in range(3))] for b in p3] for a in p3]
     z6 = [[(a + b) % 6 for b in range(6)] for a in range(6)]
-    return {'S_3': torch.tensor(s3), 'Z_6': torch.tensor(z6)}
+    # Q_8 by its multiplication table: {+-1, +-i, +-j, +-k} as 0..7, the same construction
+    # verify_paperB.py uses to enumerate the normal subgroups and the ceiling.
+    bm = [[(0, 0), (1, 0), (2, 0), (3, 0)], [(1, 0), (0, 1), (3, 0), (2, 1)],
+          [(2, 0), (3, 1), (0, 1), (1, 0)], [(3, 0), (2, 0), (1, 1), (0, 1)]]
+    q8 = [[0] * 8 for _ in range(8)]
+    for x in range(8):
+        for y in range(8):
+            rb, f = bm[x % 4][y % 4]
+            q8[x][y] = rb + 4 * ((x // 4 + y // 4 + f) % 2)
+    return {'S_3': torch.tensor(s3), 'Z_6': torch.tensor(z6), 'Q_8': torch.tensor(q8)}
 
 
 class Reflect(nn.Module):
@@ -127,6 +149,7 @@ def main():
             accs.append(acc)
             v = ('ABOVE ceiling' if acc > CEILING[name] + 0.03 else
                  'at ceiling' if acc > CEILING[name] - 0.03 else 'below')
+            v += f'  (chance {CHANCE[name]:.3f})' if acc < CHANCE[name] + 0.03 else ''
             print(f'{name:>6} {CEILING[name]:>9.4f} {sd:>5} {acc:>9.3f} {law:>10.4f}  {v}'
                   f'   ({time.time()-t0:.0f}s)', flush=True)
         mu = sum(accs) / len(accs)

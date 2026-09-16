@@ -3,22 +3,21 @@ The ceiling is proven: no commuting transport can exceed it at any size.
 
  group   ceiling  seed  accuracy  group-law  verdict
 --------------------------------------------------------------
-   S_3    0.3850     0     1.000     0.0037  ABOVE ceiling   (23s)
-   S_3    0.3850     1     0.339     0.0040  below   (26s)
-   S_3    0.3850     2     1.000     0.0033  ABOVE ceiling   (33s)
+   S_3    0.3850     0     1.000     0.0037  ABOVE ceiling   (36s)
+   S_3    0.3850     1     0.339     0.0040  below   (42s)
+   S_3    0.3850     2     1.000     0.0033  ABOVE ceiling   (37s)
    S_3      mean           0.780 +- 0.382
 
-   Z_6    1.0000     0     1.000     0.0046  at ceiling   (30s)
-   Z_6    1.0000     1     1.000     0.0049  at ceiling   (36s)
-   Z_6    1.0000     2     1.000     0.0033  at ceiling   (32s)
+   Z_6    1.0000     0     1.000     0.0046  at ceiling   (45s)
+   Z_6    1.0000     1     1.000     0.0049  at ceiling   (34s)
+   Z_6    1.0000     2     1.000     0.0033  at ceiling   (29s)
    Z_6      mean           1.000 +- 0.000
+
+   Q_8    0.5323     0     0.260     0.0050  below   (29s)
+   Q_8    0.5323     1     0.478     0.0052  below   (28s)
+   Q_8    0.5323     2     1.000     0.0048  ABOVE ceiling   (31s)
+   Q_8      mean           0.579 +- 0.380
 
 A reflection transport is non-commuting, so the ceiling does not bind it. This
 measures whether training actually reaches above the bound, which is a separate
 question from whether the architecture permits it.
-
-EXACT Q_8 CEILING (this project, enumeration over all 6435 multisets at L=8): 0.5323
-  abelian_ladder.txt quotes 0.544 for Q_8, which is the MONTE-CARLO estimate the ladder
-  script falls back to above 2e6 words (4000 multisets x 400 orderings). The A_4, S_4 and
-  A_5 ceilings in that file are Monte-Carlo for the same reason and are not
-  brute-forceable; only Z_6, S_3 (1287 multisets) and Q_8 are exact.

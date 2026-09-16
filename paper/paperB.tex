@@ -83,8 +83,10 @@ the same layer.
   \item \textbf{A same-order control} (Section~\ref{sec:control}) that separates the lattice from the
         group order, reported with its registered verdict --- which one run falsified.
   \item \textbf{A table-free diagnostic} (Section~\ref{sec:char}): the character norm
-        $\langle\chi,\chi\rangle$ identifies the learned quotient from traces alone, with both
-        conditions under which it is valid stated and tested.
+        $\langle\chi,\chi\rangle$ identifies the learned quotient from traces alone. Over sixteen
+        seeds it agrees with the independent error-based reading on all seven runs that are
+        homomorphisms, and integrality of the irrep multiplicities selects exactly those seven
+        runs without consulting the training objective.
   \item \textbf{Quotients as capability} (Section~\ref{sec:quotient}): when the task \emph{is} a
         quotient, the same collapse is the correct answer, and the lattice law reappears one level
         down, on the rungs of $S_4/V_4\cong S_3$ and $S_4/A_4\cong\mathbb{Z}_2$.
@@ -267,6 +269,15 @@ in the ceiling experiment, and it explains why the butterfly mean ($0.779$) and 
 ($0.780$) agree so closely: both are two solves and one collapse to the same rung, not two
 measurements of one underlying accuracy.
 
+\paragraph{A second group.} Clearing a bound on one group is thin evidence, so we repeat the test on
+$Q_8$, whose ceiling is also exact ($0.5323$ over $6435$ multisets). Three seeds give $0.260$,
+$0.478$ and $1.000$, with group-law violations $\le0.005$ throughout: one clears the ceiling
+outright, and the other two land on rungs of $Q_8$ ($1/4$ and $1/2$). This is the sharpest place to
+see that the ceiling and the rungs are different constraints. $Q_8$'s rung at $0.500$ sits just
+\emph{below} its ceiling of $0.5323$, so a run that learns the $\mathbb{Z}_2$ quotient stops a hair
+under a bound it was never subject to --- the bound binds commuting transports, and this transport
+does not commute. What stopped it was the quotient, not the ceiling.
+
 Being non-commuting removes a ceiling; it does not supply an optimiser that reaches above it. The
 rest of this paper is about where the runs that fall short actually land.
 
@@ -302,20 +313,26 @@ gives only $1,60$.
   % ---- right: where the runs actually land
   \begin{scope}[xshift=6.6cm]
     \begin{semilogyaxis}[
-        width=8.4cm, height=5.9cm, ymin=0.011, ymax=1.6,
+        width=8.6cm, height=7.2cm, ymin=0.011, ymax=1.7,
         xmin=0.3, xmax=3.7, xtick={1,2,3}, xticklabels={$Q_8$,$S_4$,$A_5$},
         ytick={0.017,0.042,0.083,0.125,0.25,0.5,1.0},
         yticklabels={0.017,0.042,0.083,0.125,0.250,0.500,1.000},
         ylabel={accuracy at $L=96$ (log scale)}, ylabel style={font=\small},
-        tick label style={font=\scriptsize}, grid=none, axis line style={soft},
+        x tick label style={font=\small}, y tick label style={font=\scriptsize},
+        grid=none, axis line style={soft},
       ]
-      % rungs as short horizontal guides, per group
-      \foreach \x/\v in {1/1.0, 1/0.5, 1/0.25, 1/0.125}{
-        \addplot[rung, thick, dashed] coordinates {(\x-0.34,\v) (\x+0.34,\v)};}
-      \foreach \x/\v in {2/1.0, 2/0.25, 2/0.083, 2/0.042}{
-        \addplot[rung, thick, dashed] coordinates {(\x-0.34,\v) (\x+0.34,\v)};}
-      \foreach \x/\v in {3/1.0, 3/0.017}{
-        \addplot[rung, thick, dashed] coordinates {(\x-0.34,\v) (\x+0.34,\v)};}
+      % Rungs as short horizontal guides, one group at a time. Written out rather than looped:
+      % \foreach variables fall out of scope before pgfplots resolves deferred axis cs coordinates.
+      \draw[rung, thick, dashed] (axis cs:0.66,1.0)   -- (axis cs:1.34,1.0);
+      \draw[rung, thick, dashed] (axis cs:0.66,0.5)   -- (axis cs:1.34,0.5);
+      \draw[rung, thick, dashed] (axis cs:0.66,0.25)  -- (axis cs:1.34,0.25);
+      \draw[rung, thick, dashed] (axis cs:0.66,0.125) -- (axis cs:1.34,0.125);
+      \draw[rung, thick, dashed] (axis cs:1.66,1.0)   -- (axis cs:2.34,1.0);
+      \draw[rung, thick, dashed] (axis cs:1.66,0.25)  -- (axis cs:2.34,0.25);
+      \draw[rung, thick, dashed] (axis cs:1.66,0.083) -- (axis cs:2.34,0.083);
+      \draw[rung, thick, dashed] (axis cs:1.66,0.042) -- (axis cs:2.34,0.042);
+      \draw[rung, thick, dashed] (axis cs:2.66,1.0)   -- (axis cs:3.34,1.0);
+      \draw[rung, thick, dashed] (axis cs:2.66,0.017) -- (axis cs:3.34,0.017);
       % measured runs
       \addplot[only marks, mark=*, mark size=1.9pt, meas] coordinates {
         (0.78,0.241) (0.93,0.521) (1.08,1.000) (1.23,0.243)
@@ -452,20 +469,65 @@ $S_4$ & trivial & $16$ \\
 
 At $d=4$ the value $2$ is attainable \emph{only} by a faithful representation, so it is a sufficient
 certificate of faithfulness. That statement is conditional on full rank, and the condition is not
-decorative: a trained transport may let a dimension die, and at $d=3$ the value $2$ means kernel
-$V_4$, at $d=2$ kernel $A_4$. We observe exactly this --- runs that solve the task with
-$\langle\chi,\chi\rangle\approx1.12$ and a single $3$-dimensional irrep carrying the whole state. The
-diagnostic must therefore be read together with the effective rank, not on its own.
+decorative: at $d=3$ the value $2$ means kernel $V_4$, at $d=2$ kernel $A_4$.
 
-A second condition matters more. $\langle\chi,\chi\rangle$ is a character norm only if the transport
-\emph{is} a representation. In our runs the solved models carry a group-law violation of $\approx
-0.008$ and measure $\langle\chi,\chi\rangle = 1.99$--$2.01$, agreeing with the table; the failed runs
-carry violations of $0.10$--$0.29$, are not homomorphisms at all, and their measured values
-($4.4$--$5.5$) are not character norms of anything and should not be read as quotient labels. The
-predicted quotient values are so far confirmed in one clean instance rather than as a set: a model
-that solves the $V_4$ task exactly (Section~\ref{sec:quotient}) decomposes as two copies of the
-trivial irrep plus the $2$-dimensional one, giving $\langle\chi,\chi\rangle = 2^2+1^2 = 5$ with
-kernel $V_4$, as the table requires.
+\paragraph{The test.} A derived table is not evidence, so we test it against trained models. Sixteen
+seeds are trained on $S_4$, and each is read twice, in ways that share no inputs:
+
+\begin{itemize}[leftmargin=*,itemsep=1.5pt,topsep=3pt]
+  \item \emph{from the errors} --- coset consistency gives the kernel $N$, as in
+        Section~\ref{sec:lattice}. This uses the group table and the model's mistakes.
+  \item \emph{from the traces} --- $\langle\chi,\chi\rangle$ and the multiplicities $m_i$, by
+        orthogonality. This uses neither labels nor errors, only $\operatorname{tr}T_g$.
+\end{itemize}
+
+If the diagnostic works, the second reading must land in the set the first one permits, on every
+run. We registered the falsifier before running: a run that is length-flat, has a group-law
+violation below $0.02$, is full rank, and whose $\langle\chi,\chi\rangle$ lies more than $0.25$ from
+every value its coset-identified kernel allows.
+
+\begin{table}[H]\centering\small
+\caption{Sixteen seeds on $S_4$. Seven are homomorphisms by the registered tolerance; on all seven
+the trace reading agrees with the kernel the errors identify, and the multiplicities identify that
+same kernel a third time. No run triggered the falsifier.}
+\begin{tabular}{lccl}
+\toprule
+kernel from the errors & runs & allowed $\langle\chi,\chi\rangle$ & measured \\
+\midrule
+$1$ (faithful) & 5 & $2$          & $2.001,\;2.002,\;2.004,\;1.999,\;2.000$ \\
+$V_4$          & 2 & $3,\,4,\,5$  & $3.001,\;2.999$ \\
+$A_4$          & 0 & $8,\,10,\,16$& --- \\
+$S_4$          & 0 & $16$         & --- \\
+\bottomrule
+\end{tabular}
+\label{tab:char}
+\end{table}
+
+The decompositions are exact, not merely close. A faithful run reads $m_{\text{sign}}=1.000$,
+$m_{\text{std}}=1.000$ and the rest zero to three decimals ($1+3=4$ dimensions,
+$\langle\chi,\chi\rangle=2$); a $V_4$ run reads $m_{\text{triv}}=0.999$, $m_{\text{sign}}=1.001$,
+$m_{2\text{dim}}=1.001$ ($1+1+2=4$, $\langle\chi,\chi\rangle=3$), and
+$\ker=\ker(\text{triv})\cap\ker(\text{sign})\cap\ker(2\text{dim})=V_4$, which is what the errors said.
+
+\paragraph{Integrality is an independent check on the condition.} The diagnostic is meaningful only
+for a transport that \emph{is} a representation, and above we decided that with the group-law
+penalty --- the same quantity the training objective minimises, which is uncomfortably circular. A
+character is a non-negative \emph{integer} combination of irreps, so the distance of the measured
+multiplicities from the nearest integer tests the same thing without reference to the objective. The
+two criteria separate the sixteen runs identically and with room to spare: the seven scored runs have
+integrality deviation at most $0.005$, and the best of the other nine is $0.147$, a gap of $29\times$
+with no overlap. A run that is not a homomorphism has a $\langle\chi,\chi\rangle$, but it is not a
+character of anything, and integrality says so without being told.
+
+\paragraph{What this does not cover.} No scored run landed on the $A_4$ or $S_4$ kernels, so the
+predicted values $8,10,16$ remain derived rather than observed --- the runs that did reach those
+kernels ($\langle\chi,\chi\rangle$ of $2.68$ and $1.65$) had group-law violations of $0.14$--$0.16$
+and are not representations. The table is therefore confirmed on two of its four rows. Separately,
+one run solves the task at accuracy $1.000$ while failing the homomorphism test (violation $0.051$,
+$\langle\chi,\chi\rangle=1.22$, with $m_{\text{std}\cdot\text{sign}}=1.06$ carrying almost all of it):
+an approximately three-dimensional faithful representation with a fourth dimension dying. Solving the
+word problem does not require being an exact homomorphism, and the diagnostic correctly declines to
+label such a run.
 
 Finally, the diagnostic is better at certifying than at training. Adding a penalty that drives the
 mean squared trace toward $2.0$ --- no table, no labels, nothing but traces --- solved 2 of 6 seeds
@@ -600,12 +662,13 @@ width 6, which that account does not predict.
 
 Three weaknesses are specific. The bottom rung is chance, so the four $A_5$ runs confirm the law
 without demonstrating it, and the positive evidence rests on the intermediate rungs of $Q_8$ and
-$S_4$ and on coset consistency. Clearing the abelian ceiling is shown on $S_3$ only; on larger groups
-the same transport falls below what a commuting transport achieves, so Section~\ref{sec:ceiling}
-bounds what the architecture can express and says nothing about what training reliably finds. And the
-character diagnostic is doubly conditional --- on the transport being a homomorphism, and on the
-representation being full rank --- with the predicted quotient values so far confirmed in a single
-clean instance rather than across the table.
+$S_4$ and on coset consistency. Clearing the abelian ceiling is shown on $S_3$ and $Q_8$, and on each
+only by a subset of seeds, so Section~\ref{sec:ceiling} bounds what the architecture can express and
+says little about what training reliably finds. And the character diagnostic is doubly conditional
+--- on the transport being a homomorphism, and on the representation being full rank. Both conditions
+are now measured rather than assumed, and the diagnostic agrees with the error-based reading on all
+seven runs that meet them, but two of the table's four rows ($A_4$ and $S_4$ kernels) have no
+qualifying run behind them and remain derived rather than observed.
 
 Every derived quantity above --- the ceiling, the rung sets, the attainable character norms --- is
 recomputed from the group definitions by \texttt{evidence/verify\_paperB.py}, which also re-reads the

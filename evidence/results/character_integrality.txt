@@ -1,0 +1,35 @@
+INTEGRALITY OF THE MULTIPLICITIES  (derived from evidence/results/character_table.txt)
+
+A character is a NON-NEGATIVE INTEGER combination of irreps, so how far the measured
+multiplicities sit from the nearest integer is a second test of "is this transport a
+representation at all" -- one that never looks at the group-law penalty that was used to
+decide which runs to score.
+
+ sd   max |m_i - round(m_i)|   g-law < 0.02?
+----------------------------------------------
+  0                    0.147              no
+  1                    0.363              no
+  2                    0.001             yes
+  3                    0.376              no
+  4                    0.474              no
+  5                    0.000             yes
+  6                    0.360              no
+  7                    0.002             yes
+  8                    0.003             yes
+  9                    0.005             yes
+ 10                    0.004             yes
+ 11                    0.430              no
+ 12                    0.213              no
+ 13                    0.344              no
+ 14                    0.005             yes
+ 15                    0.356              no
+
+  scored as homomorphisms (n=7): worst integrality deviation 0.005
+  all other runs          (n=9): best  integrality deviation 0.147
+  the two sets are disjoint (0.005 < 0.147), so two independent criteria --
+  the group law, and integrality of the irrep multiplicities -- pick out the same runs.
+
+  This matters because the character diagnostic is only meaningful for a transport that
+  IS a representation, and integrality tests that without reference to the training
+  objective. The runs it rejects are the ones whose <chi,chi> would otherwise be read as
+  a quotient label it does not deserve.
