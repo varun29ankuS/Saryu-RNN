@@ -32,16 +32,15 @@ or ten million. The 25M model carries 11,904 numbers of state in total.
 
 ## About this project
 
-Saryu is an independent, open research project built in India. It is named after the Saryu, the
-river of the Suryavansh lineage, and the sun over the river is its mark.
+Independent open research, built in India.
 
-The aim is to work on a frontier question rather than at frontier scale: *what can a fixed-size
-recurrent state actually represent, and what does it do when it cannot?* The trained models here are
-small (5M and 25M parameters, character-level) and are research instruments, not a product — the
-[results table](#results-character-level-enwik8) says plainly what they do and do not show. What is
-meant to be competitive is the evidence: every design choice is settled by an experiment that is
-committed before it runs and reported whichever way it comes out, including when that means
-retracting a number we had already published.
+The question is a frontier one even though the scale is not: *what can a fixed-size recurrent state
+actually represent, and what does it do when it cannot?* The trained models here are small — 5M and
+25M parameters, character-level — and are research instruments rather than a product; the
+[results table](#results-character-level-enwik8) says plainly what they do and do not show. The work
+is meant to be judged on its evidence: design choices are settled by experiments committed before
+they run and reported whichever way they come out, including when that means retracting a number
+already published here, which has happened twice.
 
 ## What the research found
 

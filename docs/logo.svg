@@ -10,7 +10,7 @@
       <stop offset="1" stop-color="#17a0b8"/>
     </linearGradient>
   </defs>
-  <!-- the solar dynasty: a sun standing above its own reflection -->
+  <!-- a sun standing above its own reflection -->
   <g>
     <circle cx="48" cy="38" r="15" fill="url(#sun)"/>
     <g stroke="url(#sun)" stroke-width="3.4" stroke-linecap="round">
