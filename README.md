@@ -34,13 +34,7 @@ or ten million. The 25M model carries 11,904 numbers of state in total.
 
 Independent open research, built in India.
 
-The question is a frontier one even though the scale is not: *what can a fixed-size recurrent state
-actually represent, and what does it do when it cannot?* The trained models here are small — 5M and
-25M parameters, character-level — and are research instruments rather than a product; the
-[results table](#results-character-level-enwik8) says plainly what they do and do not show. The work
-is meant to be judged on its evidence: design choices are settled by experiments committed before
-they run and reported whichever way they come out, including when that means retracting a number
-already published here, which has happened twice.
+*What can a fixed-size recurrent state actually represent, and what does it do when it cannot?*
 
 ## What the research found
 
