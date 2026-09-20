@@ -36,6 +36,11 @@ Independent open research, built in India.
 
 *What can a fixed-size recurrent state actually represent, and what does it do when it cannot?*
 
+A vector state carries order and position well, and this project has group-theoretic results saying
+exactly how much. It does not carry many independent facts, and the reason turned out to be the
+*read* rather than the state — which is why a matrix memory is now part of the design rather than a
+planned extension.
+
 ## What the research found
 
 Two technical reports. [Paper A](paper/main.pdf) is the architecture; [Paper B](paper/paperB.pdf) is
@@ -67,6 +72,18 @@ its key's reflections a second time, and assumes the stored pair is untouched in
 recurrence does neither: it never applies a query's inverse, and every later token transports the
 *whole* state. More reflections are therefore a faster scrambler, not more capacity. The trace law
 bounds what a product of reflections *could* store; it does not say this recurrence can reach it.
+
+**The recall wall is the read, and it took a baseline we had never run to see it.** Associative
+recall held at ~0.32 for four key–value pairs across 170 runs and 21 interventions, every one of
+which changed the transport, the write or the training order. A 290,370-parameter transformer
+solves the identical task at 1.000, so the task was solvable all along and the wall was ours
+([`evidence/baseline_transformer.py`](evidence/baseline_transformer.py)). The cause is the
+common-factor derivation [below](#why-it-is-built-this-way): nothing that leaves the read alone can
+work, which is why twenty-one things that did not touch it all returned the same number. Seven
+counting arguments and five constructions that predicted ~0.97 were falsified along the way; the
+standing conclusion is that constructions here verify the mathematics and have no demonstrated
+predictive value for what gradient descent actually finds
+([`evidence/cell_shootout.py`](evidence/cell_shootout.py)).
 
 **A trained transport can be read as a representation.** Its character norm `⟨χ,χ⟩`, computed from
 traces alone with no group table and no labels, identifies which quotient it learned. Over sixteen
@@ -117,16 +134,24 @@ rescaling factors stay below e^8.1.
 unit lower-triangular solve per chunk and no matrix inverse. It matches the step-by-step
 recurrence to float precision, and [`tests/`](tests/) check that on every run.
 
-**A small vector state, tuned for tracking rather than storage.** A vector per head is cheap and
-suits tracking *where* a sequence is. At `n_h = 2` it holds almost no independent facts, and we
-first assumed the fix was a separate matrix memory
-([`experimental/memory/`](experimental/memory/), still untrained). The trace law says otherwise:
-the shortfall is not the vector state but the *number of reflections*, since a single reflection
-hides a value least of any non-trivial orthogonal map. Storage needs `n_h ≈ d_h/2`, which is the
-same mechanism at a different setting rather than a second memory
-([`evidence/trace_law.py`](evidence/trace_law.py)). That predicts a heterogeneous layer — tracking
-heads at `n_h = 2` beside storage heads at `n_h ≈ d_h/2` — which is
-[not yet built](#status-and-next-steps).
+**A small vector state for tracking — and now a matrix for storage.** A vector per head is cheap
+and suits tracking *where* a sequence is. At `n_h = 2` it holds almost no independent facts. An
+earlier version of this section argued the fix was more reflections — `n_h ≈ d_h/2`, the same
+mechanism at a different setting rather than a second memory. **That was wrong**, and it
+contradicted the paragraph above, which had already measured recall falling backwards as `n_h`
+rises. The real cause is narrower than either account. Unrolling the recurrence gives
+
+    h_T = a_T · T_T · [ Σ_t M_{t→T−1} b_t ] + b_T
+
+so the query's transport is a *common factor* over every stored item: it reorients all of them
+together and cannot pick one out of a sum. Selection is left to a diagonal output gate, which has no
+item axis. A contraction read `S q = Σ_i v_i (k_i · q)` has one. At equal state size on the same
+task: matrix with a contraction read scores 0.984 with 100,803 parameters, the shipped vector with
+a diagonal gate 0.32 with 387,218 ([`evidence/cell_shootout.py`](evidence/cell_shootout.py),
+[`results/matrix_decision.txt`](evidence/results/matrix_decision.txt)). Saryu is adopting the matrix
+state with a targeted rank-one erase — a known design that DeltaNet and the models built on it
+already ship, not something invented past it. The Householder-product transition stays, and that is
+the part that is ours.
 
 **The block around the transport.** Normalisation, a width-4 causal convolution, per-head
 RMSNorm, a SiLU output gate and a SwiGLU feed-forward surround the recurrence. This surrounding
@@ -138,6 +163,9 @@ character-level enwik8, so each design question is settled in hours before anyth
 Predictions are committed before a run and reported whichever way they come out; the same-order
 control in [`evidence/same_order.py`](evidence/same_order.py) is recorded as falsified, because one
 of its 28 scored failures missed the registered tolerance, and it says so.
+[`evidence/CLAIMS.md`](evidence/CLAIMS.md) is the ledger of every claim this project has made — 22
+so far, 13 of them retracted — with what caught each one. A test that decided nothing is recorded as
+void rather than negative, so it is not later miscounted as evidence.
 
 ## Results (character-level enwik8)
 
@@ -201,7 +229,10 @@ evidence/               the small experiments behind each design choice, with th
   character_table.py      reading a trained transport as a representation, from traces alone
   trace_law.py            binding capacity is a character: overlap ~ (1-2/d)^k
   verify_paperB.py        recomputes every derived number in paper B from the group definitions
-experimental/memory/    the matrix-memory extension (not trained yet; see its README)
+  baseline_transformer.py a matched transformer on the recall task: the control 170 runs lacked
+  cell_shootout.py        matrix-with-contraction vs wide-vector-with-unbinding, at equal state
+  CLAIMS.md               every claim made here, 13 of 22 retracted, and what caught each
+experimental/memory/    the matrix-memory extension (see its README)
 paper/main.pdf          report A: the architecture, the kernel, the trained models
 paper/paperB.pdf        report B: what the transport does when it cannot solve a group
 checkpoints/            saryu_25m.pt, saryu_v4b_last.pt  (release v0.1, not in git)
@@ -212,14 +243,19 @@ corpus/                 enwik8                            (not in git)
 
 - **Works:** the reflection recurrence at 5M and 25M parameters, the exact kernel, the demos, and
   the group-theoretic results in [Paper B](paper/paperB.pdf).
-- **Next:** matched comparisons against other recurrent and attention models at larger scale, with
-  several seeds and a second corpus — the single biggest gap, and the reason no competitive claim is
-  made here. Also a fused GPU kernel; the current one is plain PyTorch, though chunk size alone
-  already buys 2.3–5.4× and is exact at any size.
-- **Open:** the heterogeneous layer the trace law predicts — tracking heads at `n_h = 2` beside
-  storage heads at `n_h ≈ d_h/2`. `n_h` is now a constructor argument, so this is testable; whether
-  a *trained* model uses the capacity is being measured in
-  [`evidence/nh_sweep.py`](evidence/nh_sweep.py).
+- **Next:** a matrix state with a contracting read inside the existing block, keeping the
+  Householder-product transition and the chunk-parallel kernel. Then matched comparisons against
+  other recurrent and attention models at larger scale, with several seeds and a second corpus —
+  the single biggest gap, and the reason no competitive claim is made here.
+- **Open:** a hysteretic write gate, recorded **void rather than negative** — both arms scored below
+  chance because the cell was deliberately given the weak diagonal read, so there was no working
+  baseline for an improvement to appear against
+  ([`results/matrix_decision.txt`](evidence/results/matrix_decision.txt)).
+- **Retired:** the heterogeneous layer at `n_h ≈ d_h/2`, falsified by the sweep and by the
+  derivation above. A fused GPU kernel is also no longer next: choosing the chunk size properly
+  already buys 1.1–5.4×, which drops the recurrence to 17–53% of a step, and a hand-written kernel
+  would be competing for the remainder without a fused backward
+  ([`results/kernel_profile.txt`](evidence/results/kernel_profile.txt)).
 - **Known limits:** the trained models stop using context at about 512 characters; two of the four
   rows of Paper B's character table have no qualifying run behind them; A₅'s rung coincides with
   chance, so those runs confirm the lattice law without demonstrating it.
