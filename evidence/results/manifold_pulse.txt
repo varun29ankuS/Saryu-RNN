@@ -1,0 +1,38 @@
+MANIFOLD PULSE  tracking one stored value over 8 classes, 1600 sequences
+does separability RISE approaching the query position (untangling) or decay?
+
+--- 2 pairs   (value written at position 1, query key at position 9) ---
+ pos   token     sep     R_M     D_M    corr
+   0     key   0.153   0.097     8.1   1.000
+   1    val*   1.000   0.396     2.6   0.539
+   2     key   1.000   0.264     8.8   0.937
+   3     val   0.991   0.260    15.4   0.997
+   4    fill   1.000   0.207    11.9   0.126
+   5    fill   1.000   0.274    16.9   0.975
+   6    fill   1.000   2.414    26.3   0.674
+   7    fill   1.000   0.319    20.2   0.965
+   8     SEP   1.000   0.209    18.2   0.951
+   9   query   1.000   0.898    20.4   0.310
+
+--- 4 pairs   (value written at position 1, query key at position 13) ---
+ pos   token     sep     R_M     D_M    corr
+   0     key   0.138   0.079     3.2   1.000
+   1    val*   1.000   0.115     6.7   0.989
+   2     key   0.988   0.314     7.9   0.950
+   3     val   0.906   1.330    20.6   0.962
+   4     key   1.000   0.287    17.8   0.410
+   5     val   1.000   1.360    21.8   0.812
+   6     key   0.969   1.417    24.3   0.806
+   7     val   1.000   1.413    24.7   0.612
+   8    fill   0.981   1.474    27.3   0.730
+   9    fill   0.959   1.716    29.3   0.697
+  10    fill   0.909   1.613    29.5   0.766
+  11    fill   0.878   1.821    30.3   0.738
+  12     SEP   0.903   1.038    24.1   0.717
+  13   query   0.922   1.673    23.4   0.355
+
+READ
+  sep rises toward the query at n=2 -> dynamic manifold management is present and its
+                                       absence at n=4 is the mechanism
+  sep flat or decaying at both      -> no pulse here; the 2026 result does not describe
+                                       this architecture

@@ -1,0 +1,31 @@
+SET MEMBERSHIP WITHOUT BINDING: WHAT THE MODEL ACTUALLY LEARNS
+evidence/trace_train.py, base arm, gap 4, 3000 steps, d=128, 2 layers, chance top1 = 1/64 = 0.016.
+
+The decisive column is in_set: is the prediction one of the values PRESENT in this sequence?
+in_set near 1 with top1 near 1/pairs means the model knows the SET of values and not the
+key->value pairing -- which is exactly what a level-1 (sum-of-writes) state can represent.
+
+  pairs   top1    1/pairs   in_set   top5    chance(in_set)
+      2   0.487   0.500     0.997    1.000   0.031
+      4   0.250   0.250     0.891    0.698   0.062
+      8   0.034   0.125     0.201    0.099   0.125
+
+READ AT 2 AND 4 PAIRS. The prediction is essentially always one of the values in the sequence
+(0.997, 0.891) and top1 sits exactly on 1/pairs (0.487 vs 0.500; 0.250 vs 0.250). The model
+has learned WHICH values appeared and then guesses uniformly among them. There is no binding
+at all. Training is not slow here -- it has CONVERGED to set membership, and the residual is
+pure guessing, so more steps cannot help.
+
+THE REGISTERED PREDICTION WAS "top1 ~ 1/pairs FOR ANY pairs". THAT IS FALSIFIED AT 8 PAIRS.
+top1 is 0.034, not 0.125. The reason is visible in the same row: in_set is 0.201 against a
+chance of 0.125, so at 8 pairs the model did not learn the set either. The set-membership
+solution has its own capacity limit -- perfect at 2, good at 4, gone by 8 -- and 1/pairs only
+describes the regime where the set HAS been learned.
+
+So there are two distinct ceilings, and only the first was known before:
+  superposition capacity   how many values the state can hold at once. ~4 here at d_h=16.
+  binding capacity         zero. Given the set, the model is at chance among it.
+
+Restating the claim conditionally, which is weaker than what was registered: WHEN the set is
+learned, accuracy is 1/pairs. Supported at 2 and 4 pairs; untestable at 8 because the
+precondition fails. The unconditional form does not hold and is withdrawn.

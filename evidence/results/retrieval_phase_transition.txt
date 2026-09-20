@@ -1,0 +1,124 @@
+RECALL IS A PHASE TRANSITION, AND ONE-SHOT READING HIDES IT
+===========================================================
+
+THE COMPLAINT THAT PRODUCED THIS. Every result this session moved recall by percentages -- better
+binding algebra, orthogonal axes, transport off, selective writes. The objection was that
+percentage gains mean the axis itself is wrong. It was.
+
+THE REFRAME. All of those changes improve the signal-to-noise of a SINGLE LINEAR READ. The state
+is a superposition; one linear operator extracts signal plus crosstalk; better algebra shrinks the
+crosstalk and never makes the read a decision. Attention is not better algebra: it does O(n) work
+at read time, comparing the query against every stored item. Our recurrence does O(1) work at read
+time no matter how good the binding is. That is a difference of computational class, not of
+quality. (Jelassi et al. 2024 prove a separation of this shape for copying.)
+
+Biology is on the O(n) side. Hippocampal CA3 retrieval is recurrent attractor dynamics -- pattern
+completion by iterating to a fixed point (Hopfield 1982) -- not a projection. Ramsauer et al. 2020
+showed the modern Hopfield update IS softmax attention.
+
+So: RETRIEVAL FROM A SUPERPOSITION IS AN INFERENCE PROBLEM AND WE HAVE BEEN TREATING IT AS A
+PROJECTION. Every number measured before this file is the accuracy of one step of an iteration
+that should be run to convergence.
+
+TEST 1 -- one-shot vs explain-away. HRR store h = sum_i k_i (*) v_i, query k_q. All keys are known
+  (they appeared in the sequence), so a reader MAY decode the other pairs and subtract them. That
+  is the O(n) read work attention does and the recurrence does not. 300 trials.
+
+      d=128         n=2     n=4     n=8    n=16    n=32    n=64
+      one-shot    1.000   1.000   0.983   0.770   0.447   0.183
+      iterative   1.000   1.000   1.000   0.977   0.233   0.023
+
+  Above threshold iteration is essentially EXACT -- 0.977 at n=16 where one-shot manages 0.770.
+  Below threshold it is CATASTROPHIC, and worse than one-shot: a hard cleanup onto a wrong estimate
+  injects a confidently wrong item, which corrupts the residual for every later step. Extra
+  iterations change nothing (iters 1, 2 and 4 are identical) -- greedy matching pursuit converges
+  immediately, correctly or wrongly.
+
+TEST 2 -- WHERE IS THE CLIFF, AND DOES IT SHARPEN? n* = largest n with iterative accuracy >= 0.5.
+  200 trials.
+
+      d     n*   n*/d    iterative accuracy by n
+      32     8  0.250    2:0.99  4:0.99  6:0.90  8:0.79 12:0.38 16:0.13 24:0.06 32:0.01
+      64    16  0.250    2:1.00  4:1.00  6:1.00  8:0.97 12:0.81 16:0.52 24:0.14 32:0.07
+     128    24  0.188    ... 12:1.00 16:0.97 24:0.61 32:0.22 48:0.07
+     256    32  0.125    ... 24:1.00 32:0.96 48:0.28 64:0.12
+     512    64  0.125    ... 48:1.00 64:0.79 96:0.14 128:0.04
+
+      one-shot, same runs
+      32                 2:0.99  4:0.92  6:0.81  8:0.67 12:0.47 16:0.32 24:0.20 32:0.21
+      64                 2:1.00  4:0.99  6:0.94  8:0.86 12:0.73 16:0.59 24:0.40 32:0.26
+     512                 ... 32:0.96 48:0.84 64:0.62 96:0.52 128:0.28
+
+THE FINDING -- FIRST HEADLINE WAS WRONG, CORRECTED HERE
+  I first wrote: "the iterative boundary sharpens with state size while the one-shot curve never
+  does, therefore the memory has a sharp capacity ~ d/8 and one-shot reading SMEARS it into a
+  slope; the graceful-degradation curves in the literature are an artefact of the readout."
+
+  The table above refutes that, and I did not check it before committing. Read n* at the 0.5 level
+  for BOTH decoders, not just the iterative one:
+
+      d=512    one-shot crosses 0.5 near n=96     iterative crosses 0.5 near n=70
+      d=128    one-shot near n=32                 iterative near n=26
+      d=32     one-shot near n=12                 iterative near n=10
+
+  Greedy iteration has a LOWER median capacity than one-shot at every d. It is better near accuracy
+  1.0 and worse in the tail. So no single "true capacity" is being hidden, and d/8 is a property of
+  greedy matching pursuit, not of the memory -- which the n*/d column already hinted at by drifting
+  0.25 -> 0.125 rather than holding.
+
+  CORRECTED STATEMENT: the memory does not have one capacity. EACH DECODER HAS A THRESHOLD.
+  Greedy iterative decoding is near-exact up to a boundary and catastrophic past it; one-shot
+  decoding degrades gradually and overtakes it beyond that boundary. Which decoder is better
+  depends entirely on the accuracy you demand -- and for a language model the demand is
+  near-exactness, which is the regime where iteration wins.
+
+  "One-shot never sharpens" is also wrong: d=32 one-shot falls 0.92 -> 0.21 over an 8x range in n,
+  d=512 falls 0.96 -> 0.28 over 4x, so it steepens too, just slowly. Five values of d cannot
+  distinguish "never" from "logarithmically". A max-of-n-Gaussians argument puts the one-shot
+  threshold at n ~ d/log n, which is a threshold as well.
+
+WHAT THE LITERATURE ALREADY SAYS -- and my claim about it was a straw man
+  The theory is ALREADY threshold-shaped. Arora et al. (Zoology) prove Omega(N) state dimension for
+  N-pair MQAR; Jelassi et al. 2024 is a separation theorem for copying. Both are cliffs, and
+  arora2023zoology is ALREADY IN OUR OWN refs.bib. The smooth empirical curves in that literature
+  are curves of TRAINED models, which are one-shot linear readers -- so a slope is exactly what the
+  theory predicts you should measure from them. Consistent, not a misreading.
+
+  Withdrawn: "an instrument too blunt to show a cliff rather than a hill", "the field's axis". This
+  is the second time this session I have built a "the field missed it" argument against a paper
+  already sitting in our bibliography, after krohn1965.
+
+  What survives: trained fixed-state models are one-shot linear readers, so their recall curves are
+  slopes, while the underlying bound is a threshold. That is worth stating plainly and is not a
+  criticism of anyone.
+
+WHAT REMAINS GENUINELY OPEN
+  The class difference is real and is Jelassi's result, not ours: an O(1) LINEAR PROJECTION versus
+  a NONLINEAR SELECTION over an item axis. The open question -- and the only one here that is not
+  percentage-shaped -- is whether a FIXED-SIZE state can host nonlinear selection at read time.
+  Classical Hopfield stores 0.14*d patterns in a d x d matrix WITH iteration; the same matrix read
+  linearly (S q, which is DeltaNet) gets less. Whether that difference is a step or a slope is the
+  decisive experiment, and iterations correspond to depth at the query position -- which our idle
+  second layer never had a selection nonlinearity to run.
+
+WHAT THIS CHANGES FOR SARYU
+  - The binding-algebra results (binding_vs_tracking.txt) are not wrong, they are SUB-THRESHOLD
+    engineering. They raise SNR inside a regime whose ceiling is set by n*/d.
+  - Stop reporting recall as an accuracy at one n. Report the THRESHOLD n*, and whether a design
+    change moves it. A change that lifts accuracy at fixed n without moving n* is noise on the
+    wrong axis.
+  - The honest framing for the paper: a fixed-size recurrent state is a compressed measurement of
+    the past, retrieval from it is sparse recovery, and it therefore has a capacity threshold, not
+    a capacity slope.
+
+OPEN / NOT CLAIMED
+  - The reader here is GREEDY matching pursuit with hard cleanup. A different decoder (convex
+    relaxation, soft/annealed cleanup, resonator-style alternating projection) may put the
+    threshold elsewhere. The claim is that a threshold EXISTS and sharpens with d, not that d/8 is
+    the optimal decoder's boundary.
+  - The reader is also an ORACLE: it is handed every key. A trained model is not. So n* here is a
+    CEILING on what any fixed-state model with this scheme can reach, not a prediction of what one
+    will reach.
+  - n*/d drifts down with d (0.25, 0.25, 0.188, 0.125, 0.125), so the boundary is sublinear in d
+    rather than a fixed fraction. Not fitted; more d values needed before naming a law.
+  - All simulation. Nothing trained.

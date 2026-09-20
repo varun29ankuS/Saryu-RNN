@@ -1,0 +1,86 @@
+THE WALL IS THE READ. Controlled, with a working reference on both sides.
+========================================================================
+
+After 170+ runs and 21 architectural interventions that never moved 4-pair recall off ~0.32, this
+file is the controlled comparison that identifies the cause. Two things had to be established
+first, and neither existed before today.
+
+1. A BASELINE. The project had never measured the task against anything known to work.
+
+       model         params     2 pairs              4 pairs
+       transformer   290,370    1.000 1.000 1.000    1.000 1.000 1.000
+       saryu         387,218    1.000 1.000 0.578    ~0.32 (170 runs)
+
+   A SMALLER transformer solves it three times out of three on identical data in the same 5,000
+   steps. So the task is solvable at this budget, the wall is architectural, and none of the 21
+   nulls were noise around an unreachable target.
+
+2. A WORKING RECURRENT REFERENCE. The first DeltaNet implementation here scored 0.13-0.16, below
+   set-restricted chance. That was a bug in my code, not a fact about DeltaNet: it had no short
+   causal convolution. arXiv 2609.16183 reports the convolution DOMINATES (~+0.5 recall in both
+   model families, with architectural class differences collapsing from +0.32 to +0.03 once both
+   have one). I had read that paper hours earlier and not applied it.
+
+       DeltaNet, 4 pairs      conv=False   conv=True
+         lr 1e-3                 0.133       0.188
+         lr 3e-3                 0.094       0.961
+
+   The convolution takes it from 0.094 to 0.961 at the same learning rate. Published result
+   reproduced.
+
+THE CONFOUND, RULED OUT. That result needed lr = 3e-3, and every Saryu run in this project used
+3e-4 or 1e-3. Saryu cannot use it:
+
+       saryu, AdamW      lr 1e-3  0.266  (loss 2.540)
+                         lr 3e-3  0.102  (loss 4.031, diverged)
+                         lr 1e-2  0.023  (loss 4.178, diverged)
+
+   1e-3 is already at its stability limit. Not under-tuning.
+
+THE CONTROLLED RESULT
+
+       transformer                                1.000
+       DeltaNet: matrix state + contraction S q   0.961
+       Saryu:    vector state + diagonal gate     0.32
+
+   Both recurrent cells have the short conv. Both use Householder-family operators -- Saryu's
+   transition IS DeltaProduct's. Learning rate is ruled out in both directions. The isolated
+   difference is the MATRIX STATE WITH A CONTRACTING READ.
+
+WHY, AS A DERIVATION RATHER THAN A CORRELATION
+   Unrolling gives h_T = a_T T_T [ sum_t M_{t->T-1} b_t ] + b_T. The query sits at position T, so
+   its transport T_T appears in every term and FACTORS OUT. A common rotation reorients all stored
+   items together; it cannot select one from a sum. The entire query-dependent selection capacity
+   reduces to W diag(g_q) T_q, and at nh=2 the transport is within 4% of the identity (tr/dh =
+   0.957 on the 25M checkpoint), so selection rests almost entirely on a DIAGONAL gate.
+
+   S q = sum_i v_i (k_i . q) is the item axis that a diagonal gate does not have. Additionally
+   DeltaNet's transition (I - beta k k^T) is RANK ONE -- it erases one direction and leaves every
+   item with an orthogonal key untouched -- where Saryu rotates the entire state on every token.
+   Same operator family, applied targeted rather than globally. That is also the tracking/memory
+   antagonism this project measured empirically and mistook for a law.
+
+WHAT THIS RETIRES
+   Not the read form as a tuning knob, not the binding operator, not the geometry, not the schedule.
+   Twenty-one interventions all modified the transport, the write, or the training order. None
+   touched the thing that was wrong.
+
+   Sign binding, the cheapest possible operator (exact involution, O(d), capacity matching
+   convolution at a tenth the cost), trained WORSE than its control: 0.258/0.242 against
+   0.289-0.336. Consistent with this diagnosis -- a better binding does nothing when the read
+   cannot select.
+
+WHAT TO DO
+   Adopt the matrix state and the contracting read. This is what Qwen3-Next (36 Gated DeltaNet + 12
+   Gated Attention, 3:1) and Kimi Linear (20 KDA + 7 MLA) ship in production. Saryu's Householder
+   product transition is DeltaProduct's and is retained; what changes is the state shape and the
+   read.
+
+OPEN / NOT CLAIMED
+   - One seed per cell in the debug sweep; the 0.961 needs replication across seeds.
+   - The wide-vector-beats-matrix construction (0.993 vs 0.527 at equal floats, 128 pairs) is NOT
+     refuted -- the hrr cell here was broken, stuck at chance loss for 5,000 steps because the
+     unitary normalisation x/|x| annihilates the magnitude gradient and passes phase only. The
+     vector route is untested, not dead.
+   - Whether a vector state with a proper unbinding read can match the matrix at equal floats
+     remains the one claim this project could still own, and it needs a working implementation.

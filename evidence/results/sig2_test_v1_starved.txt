@@ -1,0 +1,45 @@
+DOES A LEVEL-2 TERM GIVE THE MODEL A MEMORY?
+MQAR 4 pairs, 2 layers, lr=0.0003, 1500 steps, seeds [0], chance 0.016
+
+  base        d=128  params   387,218
+  base-wide   d=152  params   540,056
+  sig2        d=128  params   518,306
+  sig2-anti   d=128  params   518,306
+
+arm              gap 4    gap 64
+--------------------------------
+      base gap4 500/1500 loss 4.113 24s, 48s left
+      base gap4 1000/1500 loss 3.822 49s, 25s left
+      base gap4 1500/1500 loss 3.744 74s, 0s left
+      base gap64 500/1500 loss 4.176 88s, 177s left
+      base gap64 1000/1500 loss 4.140 179s, 89s left
+      base gap64 1500/1500 loss 4.155 268s, 0s left
+base             0.113     0.012
+      base-wide gap4 500/1500 loss 4.138 30s, 60s left
+      base-wide gap4 1000/1500 loss 3.362 60s, 30s left
+      base-wide gap4 1500/1500 loss 3.360 92s, 0s left
+      base-wide gap64 500/1500 loss 4.196 108s, 216s left
+      base-wide gap64 1000/1500 loss 4.141 219s, 109s left
+      base-wide gap64 1500/1500 loss 4.161 327s, 0s left
+base-wide        0.117     0.027
+      sig2 gap4 500/1500 loss 4.122 34s, 68s left
+      sig2 gap4 1000/1500 loss 3.894 67s, 34s left
+      sig2 gap4 1500/1500 loss 3.893 101s, 0s left
+      sig2 gap64 500/1500 loss 4.169 112s, 224s left
+      sig2 gap64 1000/1500 loss 4.152 225s, 112s left
+      sig2 gap64 1500/1500 loss 4.169 337s, 0s left
+sig2             0.062     0.012
+      sig2-anti gap4 500/1500 loss 4.133 35s, 69s left
+      sig2-anti gap4 1000/1500 loss 4.016 70s, 35s left
+      sig2-anti gap4 1500/1500 loss 3.669 105s, 0s left
+      sig2-anti gap64 500/1500 loss 4.173 119s, 238s left
+      sig2-anti gap64 1000/1500 loss 4.156 235s, 118s left
+      sig2-anti gap64 1500/1500 loss 4.156 354s, 0s left
+sig2-anti        0.070     0.008
+
+  for reference, same protocol: base 0.113 / 0.012, carve+bind 0.184 / 0.020 (carve_test.txt)
+
+REGISTERED PREDICTIONS
+  P1 sig2 at gap 4 > 0.40:  0.062 -> FAILS
+  P2 sig2 at gap 64 > 0.30: 0.012 -> FAILS
+  P3 base-wide (4% MORE params) does not reach sig2 at gap 4: 0.117 vs 0.062 -> FAILS

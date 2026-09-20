@@ -1,0 +1,16 @@
+CURRICULUM 2  target 4 pairs, gap 4, muon lr 0.0003, 6000 steps, 8 seeds
+architecture identical in every arm; only the order of the data changes
+R_M is the within-class manifold radius at the query position: ~0.3 where the model
+works (2 pairs), ~1.5 where it does not (4 pairs)
+
+     arm   solved   rate  best per seed (R_M at end)
+----------------------------------------------------------------------
+ uniform      0/8   0.00  0.336(1.42), 0.312(1.18), 0.328(1.46), 0.320(1.49), 0.297(1.49), 0.320(1.21), 0.305(1.13), 0.297(1.50)
+    slow      0/8   0.00  0.766(1.37), 0.641(1.75), 0.297(1.40), 0.305(1.01), 0.312(1.27), 0.297(1.10), 0.289(1.28), 0.719(1.74)
+   gated      0/8   0.00  0.719(1.60), 0.727(1.69), 0.266(1.79), 0.367(1.25), 0.281(1.46), 0.523(1.88), 0.680(1.80), 0.719(1.80)
+
+11291s
+READ
+  slow > uniform            -> the curriculum is real and the fix is the data order
+  R_M low on locked seeds   -> tight manifolds are the MECHANISM, not a correlate
+  slow == uniform           -> 0.773 was a fluke; nothing has ever moved

@@ -1,0 +1,35 @@
+ADAMW AGAINST MUON AT 5M -- TUNED SWEEP ON ONE T4
+kaggle/optim (YOUR_KAGGLE_USERNAME/saryu-optim), 2026-09-16, repo at 7ab3fce. 5,099,173 parameters
+(d=328, 4 layers, 8 heads, 2 reflections), full enwik8, context 128, batch 48, 5000 steps, WSD
+schedule, z-loss 1e-4, clipping 1.0, seed 0. Only the optimiser and its rate differ. In muon mode
+the embeddings, head and every 1-D parameter stay on AdamW at 1e-3; the quoted rate is Muon's own.
+Evaluation scores identical text at every length (EVAL_ANCHOR=8192). Total 7,997s for six arms.
+
+           arm   s/step   bpc@128   bpc@512   bpc@2048   bpc@8192
+adamw@0.0005      0.208    1.6662    1.5826     1.5826     1.5826
+adamw@0.001       0.210    1.6525    1.5649     1.5649     1.5649   <- best
+adamw@0.002       0.210    1.6711    1.5868     1.5868     1.5868
+ muon@0.01        0.234    1.6548    1.5656     1.5656     1.5656   <- best Muon
+ muon@0.02        0.237    1.6642    1.5736     1.5736     1.5736
+ muon@0.04        0.235    1.7013    1.6215     1.6215     1.6215
+
+VERDICT: keep AdamW.
+1. Loss is a tie. Best AdamW 1.6525 against best Muon 1.6548 at context 128 (0.0023), and 1.5649
+   against 1.5656 at 512 (0.0007). Both gaps are far inside the seed spread measured at 1M
+   (0.02 for AdamW, 0.006 for Muon; see optimizer_local.txt).
+2. Muon costs 12.5% more wall clock per step (0.234-0.237 against 0.208-0.210 s/step), which is the
+   Newton-Schulz orthogonalisation. At matched compute AdamW wins; at matched steps it is a draw.
+3. Muon is more rate-sensitive here: 0.04 loses 0.049 bpc against its own best, while AdamW's worst
+   rate loses 0.019. Its best rate sat at the BOTTOM edge of the swept range, so a lower rate
+   (0.005, 0.0025) might close the loss gap -- it would still carry the 12.5% tax.
+4. Consistent with the literature: Muon's documented advantage appears at large batch sizes beyond
+   the critical batch size (Shah et al. 2025, 2505.02222). Our batch is 48 x 128 = 6,144 tokens,
+   far below that regime, so a tie is the expected result rather than a surprise.
+
+WHEN TO REVISIT: if batch size grows by an order of magnitude, or at >=100M parameters. Then sweep
+rates BELOW 0.01, use the cheap cubic orthogonalisation (Huang 2026, 2606.00371: training quality
+is not monotone in polar accuracy), and consider the Adam/Muon hybrid (Zhang et al. 2026,
+2602.17080) rather than plain Muon. MuonClip's QK-clip does not apply: Saryu has no attention.
+
+SIDE OBSERVATION: every arm repeats its 512 value at 2048 and 8192, reproducing at 5M with a fresh
+training run the saturation measured on the released checkpoints (effective_context.txt).

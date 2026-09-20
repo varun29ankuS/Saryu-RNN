@@ -1,0 +1,18 @@
+BINDING GRADIENT  4 pairs, gap 4, 3000 steps, lr 0.0003, seed 0
+B = diagonal minus off-diagonal mass of the assignment matrix; B = 0 for ANY rank-one readout.
+
+gradient alignment:
+  at init        B=-0.0006  |gL|=1.0448e+01  |gB|=2.9713e+00  cos(-gL,gB)=+0.8028
+    step 1000/3000 ce 3.991 89s
+    step 2000/3000 ce 3.102 181s
+    step 3000/3000 ce 2.948 280s
+  after training B=+0.0095  |gL|=3.0444e+00  |gB|=9.7831e-01  cos(-gL,gB)=+0.7496
+
+READING IT
+  cos at init      +0.8028
+  cos after        +0.7496
+  B after          +0.0095   (0 = rank one, no key-dependence)
+
+  Binding IS loss-improving and the descent direction points partly along it.
+  Then this is conditioning, not geometry: the step along that direction is simply
+  small, and a preconditioner should recover it.

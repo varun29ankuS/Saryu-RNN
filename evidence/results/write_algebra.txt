@@ -1,0 +1,98 @@
+DEPOSIT OR DISPOSITION -- and the benchmark that could never tell
+=================================================================
+
+TWO ROUTES, ONE AXIS. Fable's review, arguing from CDMA multiuser detection, put the open question
+on WRITE algebra rather than read algebra. Independently, the classical Indian account of memory
+says a samskara is not a stored copy placed in a container but a DISPOSITIONAL MODIFICATION of the
+substrate, reactivated by resemblance (sadrsya). Deposit versus disposition is a claim about the
+write. Both routes point at the same place, which is either real or exactly the kind of convergence
+I manufacture -- so it was tested rather than asserted.
+
+It is not a foreign import either. H(u,beta) = I - beta*u*u^T IS the erase half of a delta rule.
+Delta writing is S <- S(I - beta k k^T) + beta v k^T. We shipped the first term, and our write is
++ g*c with c independent of the key. We built half the rule and never built the other half.
+
+THE CONTROL. Every arm gets the SAME NUMBER OF STORED SCALARS B. Vector arms are B wide; matrix
+arms are sqrt(B) x sqrt(B). All arms are read ONCE and LINEARLY -- no iteration, no oracle
+decoder, no cleanup beyond argmax over the value codebook -- so the write is what varies.
+
+RESULT 1 -- AT EQUAL BUDGET, THE WIDE VECTOR BEATS THE NARROW MATRIX. Decisively.
+
+    budget B = 4096   vector width 4096   matrix 64 x 64
+    arm          kind          n=2    n=8   n=32   n=64  n=128
+    vec-add      deposit     1.000  1.000  1.000  1.000  0.993
+    vec-delta+   DISPOSITION 1.000  1.000  1.000  1.000  0.987
+    mat-hebb     deposit     1.000  1.000  1.000  1.000  0.973
+    mat-delta    DISPOSITION 1.000  1.000  1.000  0.893  0.527
+
+  mat-delta steps exactly at n = m = 64 and then collapses, which is the known DeltaNet/AGS-1985
+  behaviour and confirms the harness reproduces published results (P2, registered). But at the
+  SAME stored-scalar cost the vector arms hold 128 pairs at ~0.99 where the matrix holds 0.53.
+  The field's default assumption that a matrix state is the better memory is a statement about
+  ARCHITECTURE, not about cost: a matrix spends its budget on sqrt(B) width, and width is what
+  suppresses crosstalk. P3 (registered, flagged as the unknown one) is CONFIRMED.
+
+RESULT 2 -- P1 IS FALSIFIED AS STATED, AND THE REASON INDICTS OUR BENCHMARK.
+  Deposit and disposition are INDISTINGUISHABLE above. They should be: in MQAR each key is written
+  exactly once, so erase-then-write has nothing to erase. The delta rule's entire advantage is
+  OVERWRITING, and MQAR never overwrites.
+
+  Testing the case the rule is actually for -- n = 8 keys, each written R times with different
+  values, recall the LAST:
+
+      arm          kind           R=1     R=2     R=4     R=8
+      vec-add      deposit      1.000   0.460   0.225   0.120
+      vec-delta    DISPOSITION  1.000   1.000   1.000   1.000
+      mat-hebb     deposit      1.000   0.495   0.280   0.130
+      mat-delta    DISPOSITION  1.000   1.000   1.000   1.000
+
+  Deposit decays as ~1/R -- old values accumulate and the read cannot tell which was last.
+  Disposition is flat at 1.000. That is a CATEGORICAL difference, not a percentage, and it is the
+  first one this project has produced.
+
+  CONSEQUENCE. Every measurement in this repository ran on a task structurally incapable of
+  distinguishing the two write rules. The write never appeared as an axis because the benchmark
+  could not see it. Language overwrites constantly -- entity state changes, variable reassignment,
+  correction and retraction -- so this is not an exotic corner.
+
+RESULT 3 -- DISPOSITION ON A VECTOR REQUIRES RECOGNITION. This is the structural finding.
+  The obvious vector delta rule, h <- h - k (*) (k^* (*) h) + k (*) v, is ILL-DEFINED. With unitary
+  keys the binding inverse is exact (measured error 3.7e-8 against 1.2e-1 for ordinary random
+  keys, which are not unitary), so k (*) (k^* (*) h) = h IDENTICALLY. The "erase" term is the
+  identity and wipes the whole state at every write -- it scores 0.787 at n=2 and falls to 0.020.
+  Kept in the file as `vec-delta!`, a negative control.
+
+  The delta rule needs k k^T, a RANK-ONE PROJECTOR isolating one direction out of m. Convolution
+  binding is full-rank invertible and admits no such projector. So a vector state with invertible
+  binding cannot erase by projection at all. The only way to know what a key currently addresses
+  is to READ it and MATCH it against the codebook -- a nonlinearity, recognition by resemblance --
+  and then subtract exactly that. With that step the vector arm is 1.000 at every R.
+
+  So disposition is not free: on a matrix it is linear algebra, on a vector it costs a recognition
+  step. That the erase requires recognition is the one place where the samskara/sadrsya framing
+  earned its keep rather than decorating a result -- and it is realisable, because a real model's
+  value codebook IS its vocabulary embedding.
+
+WHAT THIS PROPOSES FOR A CHEAP ARCHITECTURE
+  Wide vector state + unitary convolution binding + recognition-gated erase. At B = 4096 stored
+  scalars it holds 128 pairs at ~0.99 AND survives 8x overwriting at 1.000, where a DeltaNet-style
+  64x64 matrix at the same cost gets 0.527 and 1.000. Inference stays O(1) per token in state size
+  with an FFT binding at O(B log B).
+
+REGISTERED-PREDICTION SCORECARD
+  P1  disposition > deposit, widening with n        FALSIFIED as stated (identical without
+                                                    overwrites); holds only under overwriting,
+                                                    where it is categorical
+  P2  mat-delta steps at n = m, mat-hebb slopes     CONFIRMED (calibration against known results)
+  P3  wide vector beats narrow matrix at equal B    CONFIRMED, and by a large margin
+
+OPEN / NOT CLAIMED
+  - All constructions. Keys are handed over rather than learned, values come from a known codebook,
+    and nothing is trained. This is the seventh time in this session that a mechanism has been shown
+    to work by construction; the previous six were all reachable in the shipped model and never
+    used by training.
+  - The recognition-gated erase uses a hard threshold (0.5) and a hard argmax. A trained model would
+    need a soft version, and soft versions have their own failure modes.
+  - The overwrite test uses n = 8 at one budget. The interaction between n, R and B is not mapped.
+  - Nothing here says the gains survive contact with gradient descent, which is the gap this whole
+    session has been documenting.

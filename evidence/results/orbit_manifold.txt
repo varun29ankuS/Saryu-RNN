@@ -1,0 +1,14 @@
+ORBIT MANIFOLD  d=128 H=8 nl=2, 3000 steps, 400 contexts per measurement
+an item enters as b_i then is rotated by every following token; across contexts it
+sweeps an orbit. R_M ~ 0 means a POINT, R_M ~ 1.41 means fully smeared (orthogonal).
+
+ pairs   nh     acc     R_M     D_M    |mu|
+--------------------------------------------
+     2    2   1.000   0.999    25.7   0.049
+     4    2   0.162   0.999    19.3   0.046
+     2    8   0.462   0.999    15.2   0.038
+     4    8   0.162   0.998    11.1   0.059
+
+READ
+  R_M smaller where the model WORKS (n=2) -> orbit spread is what the wall is about
+  R_M the same at n=2 and n=4             -> falsified, like the rest of the geometry

@@ -1,0 +1,151 @@
+MEMORY MECHANISMS UNDER TRANSPORT  d=64, bind uses 2 reflections, 200 trials
+write n pairs -> apply `gap` token transports (2 reflections each) -> read one back
+
+  1 pair(s), chance 1.000
+    mechanism            gap 0     gap 4    gap 16    gap 64
+    --------------------------------------------------------
+    reflect-naive        1.000     1.000     1.000     1.000
+    reflect-equiv        1.000     1.000     1.000     1.000
+    carved               1.000     1.000     1.000     1.000
+    outer-naive          1.000     1.000     1.000     1.000
+    outer-equiv          1.000     1.000     1.000     1.000
+    bivector             1.000     1.000     1.000     1.000
+
+  2 pair(s), chance 0.500
+    mechanism            gap 0     gap 4    gap 16    gap 64
+    --------------------------------------------------------
+    reflect-naive        0.955     0.735     0.565     0.515
+    reflect-equiv        0.955     0.955     0.940     0.935
+    carved               0.920     0.925     0.945     0.930
+    outer-naive          1.000     1.000     0.940     0.540
+    outer-equiv          1.000     1.000     1.000     1.000
+    bivector             1.000     1.000     1.000     1.000
+
+  4 pair(s), chance 0.250
+    mechanism            gap 0     gap 4    gap 16    gap 64
+    --------------------------------------------------------
+    reflect-naive        0.375     0.380     0.325     0.250
+    reflect-equiv        0.375     0.395     0.445     0.400
+    carved               0.465     0.475     0.450     0.525
+    outer-naive          1.000     1.000     0.825     0.315
+    outer-equiv          1.000     1.000     1.000     1.000
+    bivector             1.000     1.000     1.000     1.000
+
+  8 pair(s), chance 0.125
+    mechanism            gap 0     gap 4    gap 16    gap 64
+    --------------------------------------------------------
+    reflect-naive        0.190     0.175     0.110     0.090
+    reflect-equiv        0.190     0.195     0.210     0.235
+    carved               0.270     0.220     0.255     0.190
+    outer-naive          1.000     1.000     0.600     0.130
+    outer-equiv          1.000     1.000     1.000     1.000
+    bivector             1.000     1.000     1.000     1.000
+
+READING IT
+  reflect-naive is what the architecture has. If it falls with gap while
+  reflect-equiv holds, the failure is the missing inverse, not the store.
+  carved holding at every gap means disjoint support is enough to protect memory,
+  and it is the one change that needs no new state.
+  outer-naive vs outer-equiv separates "a matrix memory helps" from "a matrix memory
+  is automatically transport-proof" -- conjugation is only benign if the read is
+  transported too.
+
+
+MEMORY MECHANISMS UNDER TRANSPORT  d=64, bind uses 32 reflections, 200 trials
+write n pairs -> apply `gap` token transports (2 reflections each) -> read one back
+
+  1 pair(s), chance 1.000
+    mechanism            gap 0     gap 4    gap 16    gap 64
+    --------------------------------------------------------
+    reflect-naive        1.000     1.000     1.000     1.000
+    reflect-equiv        1.000     1.000     1.000     1.000
+    carved               1.000     1.000     1.000     1.000
+    outer-naive          1.000     1.000     1.000     1.000
+    outer-equiv          1.000     1.000     1.000     1.000
+    bivector             1.000     1.000     1.000     1.000
+
+  2 pair(s), chance 0.500
+    mechanism            gap 0     gap 4    gap 16    gap 64
+    --------------------------------------------------------
+    reflect-naive        1.000     1.000     0.925     0.480
+    reflect-equiv        1.000     1.000     1.000     1.000
+    carved               1.000     1.000     1.000     1.000
+    outer-naive          1.000     1.000     0.940     0.540
+    outer-equiv          1.000     1.000     1.000     1.000
+    bivector             1.000     1.000     1.000     1.000
+
+  4 pair(s), chance 0.250
+    mechanism            gap 0     gap 4    gap 16    gap 64
+    --------------------------------------------------------
+    reflect-naive        0.995     0.960     0.655     0.235
+    reflect-equiv        0.995     0.995     0.985     0.995
+    carved               0.970     0.960     0.980     0.975
+    outer-naive          1.000     1.000     0.825     0.315
+    outer-equiv          1.000     1.000     1.000     1.000
+    bivector             1.000     1.000     1.000     1.000
+
+  8 pair(s), chance 0.125
+    mechanism            gap 0     gap 4    gap 16    gap 64
+    --------------------------------------------------------
+    reflect-naive        0.885     0.675     0.360     0.150
+    reflect-equiv        0.885     0.850     0.860     0.875
+    carved               0.715     0.720     0.705     0.700
+    outer-naive          1.000     1.000     0.600     0.130
+    outer-equiv          1.000     1.000     1.000     1.000
+    bivector             1.000     1.000     1.000     1.000
+
+READING IT
+  reflect-naive is what the architecture has. If it falls with gap while
+  reflect-equiv holds, the failure is the missing inverse, not the store.
+  carved holding at every gap means disjoint support is enough to protect memory,
+  and it is the one change that needs no new state.
+  outer-naive vs outer-equiv separates "a matrix memory helps" from "a matrix memory
+  is automatically transport-proof" -- conjugation is only benign if the read is
+  transported too.
+
+=============================================================================
+WHAT THIS SETTLES
+
+THE TWO FAILURES ARE INDEPENDENT, AND EACH HAS A DIFFERENT FIX.
+
+  capacity      set by k, reflections per bind, exactly as the trace law says. At 4 pairs,
+                gap 0: k=2 gives 0.375, k=32 gives 0.995. At 8 pairs: 0.190 -> 0.885.
+                The law's capacity claim is correct and is NOT what failed in the model.
+
+  persistence   set by whether the READ is transported. Without that, every mechanism here
+                decays to chance as the gap grows -- including the matrix memory:
+
+                  4 pairs, k=32, gap 0 -> 64
+                  reflect-naive   0.995 -> 0.235   (chance 0.250)
+                  outer-naive     1.000 -> 0.315
+                  reflect-equiv   0.995 -> 0.995
+                  outer-equiv     1.000 -> 1.000
+
+THE HEADLINE. "Bolt on a matrix memory" does not work by itself. outer-naive collapses to
+chance just like the reflection store (1.000 -> 0.130 at 8 pairs). Conjugation is only
+benign when the query is transported too. The universal requirement is the EQUIVARIANT
+READ, not the choice of store.
+
+BUT reflect-equiv and outer-equiv both need A, the accumulated transport, which a vector
+state does not have. They are oracles here: upper bounds, not designs.
+
+CARVING IS THE ONE FIX THAT NEEDS NO ORACLE. Confining the transports to a tracking
+subspace leaves the memory subspace fixed, so the unbind commutes with the transport by
+disjoint support -- no A required, no new state:
+
+  k=32, carved:  4 pairs  0.970 0.960 0.980 0.975   across gaps 0, 4, 16, 64
+                 8 pairs  0.715 0.720 0.705 0.700
+
+Flat in gap, which is the property nothing else achieves without an oracle. It pays for it
+in capacity, since the memory lives in half the dimensions.
+
+ORDER OF WORK IMPLIED
+  1. carve a memory subspace in the real model (one line in SaryuV3Block.forward)
+  2. raise k for the carved heads only -- capacity is the second axis, and it is cheap once
+     the memory is no longer scrambled
+  3. a bivector/outer store only if 1+2 falls short; it is strictly better here (1.000
+     everywhere) but needs d^2 state AND still needs the equivariant read
+
+WHAT WOULD FALSIFY THE PLAN: if carving in the trained model leaves 4-pair recall at gap 4
+within noise of the current 0.113, then scrambling is not the binding constraint and the
+write rule is.

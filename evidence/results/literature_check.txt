@@ -1,0 +1,59 @@
+WHERE OUR BINDING RESULT SITS IN THE LITERATURE
+Checked 2026-09-17, after the arity test.
+
+WHAT IS ALREADY KNOWN, AND IT IS A LOT
+
+  Arora et al., Zoology (2312.04927) and Based (2402.18668) establish a RECALL-STATE-SIZE
+  TRADEOFF on MQAR that holds within and across architecture families: increasing the
+  recurrent state size almost always improves recall, attention gets perfect recall because
+  its state grows with sequence length, and small-state models have limited recall capacity.
+  This is the central result our work is adjacent to, and it is well established.
+
+  Boesch & Wee (2609.16183), "Anatomy of Associative Recall in Fixed-State Recurrences",
+  is the closest paper to what we did today, and it is ALREADY CITED IN THIS REPO
+  (evidence/recall_distance.py, evidence/results/recall_curriculum.txt). It reports an
+  INTERFERENCE WALL -- a sudden collapse to chance when retrieving 4 pairs among
+  distractors -- and attributes it to SPARSE SUPERVISION rather than architectural capacity,
+  with a distance curriculum taking accuracy from 0.021 to 1.000.
+
+WHY THEIR WALL IS NOT OUR WALL
+
+  They use MATRIX states (d_v x d_k, ~1024 elements) and their cells store 32 pairs at
+  >= 0.99. So the factorisation we lack is already present in their architecture: their wall
+  sits on top of a state that CAN select, and it is a training-coverage problem.
+
+  Ours is structural and arrives at n = 3, with the value set still intact (in_set ~ 0.9).
+  Their result corroborates the arity reading from the other side: give a recurrence
+  separately addressable rows and 32 pairs are fine; give it one summed vector and 3 are too
+  many.
+
+THE GAP WE MAY BE SITTING IN, STATED CAUTIOUSLY
+
+  A matrix state is BOTH bigger and factorised, so the literature's "state size" conflates
+  size with factorisation. The fetched summary of 2609.16183 notes it "doesn't explicitly
+  distinguish vector versus matrix organization as affecting filter availability".
+
+  evidence/arity_test.py holds the state size FIXED at 64 numbers and varies only the
+  factorisation: one factor of 64 against n slots of 64/n. The factorised arm wins 1.000 to
+  0.195 at n = 8 while using NARROWER slots. If that survives scrutiny it separates two
+  things the field currently reports as one -- and the direction is the opposite of the
+  naive reading, since more room in one factor does not help while less room split into
+  parts does.
+
+  This is a claim to test further, not one to publish yet. In particular it is a
+  by-construction result, and the trained-model version needs a matrix-state arm in this
+  same codebase to confirm it.
+
+ON DEPTH, WHICH SUPPORTS THE NESTED-ADDRESSING IDEA
+
+  The transformer literature finds that the number of reasoning steps a model can perform
+  IMPLICITLY is strictly limited by its depth, and that induction heads need two layers
+  minimum. So "sequential selection is depth-bounded" is an established result rather than a
+  guess, which is why the L = 2 / 4 / 6 runs are worth doing: 4 pairs needs 4.58 bits, and
+  if each layer chains one selection then L = 6 is the first depth with enough budget.
+
+SOURCES
+  Zoology, Arora et al. 2023, arXiv 2312.04927   (already in literature/)
+  Based, Arora et al. 2024, arXiv 2402.18668
+  Boesch & Wee 2026, arXiv 2609.16183            (already cited in this repo)
+  Revisiting associative recall in modern recurrent models, arXiv 2508.19029

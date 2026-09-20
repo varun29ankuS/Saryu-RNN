@@ -1,0 +1,80 @@
+THE ESCAPE IS A LINEAR INSTABILITY, NOT A JUMP
+evidence/rank_dynamics.py, 2 pairs, gap 4, AdamW lr 1e-3, 20,000 steps, sampled every 250.
+
+R = M - 1(mean row)^T, where M[i,j] = P(value of pair j | key of pair i). R is EXACTLY zero
+for a key-independent readout, so its singular values ARE the key-dependence. At 2 pairs R has
+rank at most 1, so sigma1 is the whole story.
+
+PLATEAU, steps 1 to 8250 (34 samples)
+  sigma1        mean 0.0047, max 0.0134          -- the noise floor
+  accuracy      mean 0.467                       -- the 1/2 rank-one baseline
+  diagonal mass mean 0.5007                      -- the exact barycentre
+  loss          4.48 -> 0.91
+
+  The loss falls by 80% of its total drop WITH NO KEY-DEPENDENCE WHATSOEVER. Training is
+  working the whole time; it is buying the value set and the positional prior.
+
+ESCAPE, steps 8250 to 11000
+  log sigma1 is LINEAR in step.  growth rate lambda = 0.00145 per step, R^2 = 0.82
+  doubling time 478 steps.  sigma1 0.0048 -> 0.4487
+
+  So the transition is not a discontinuity. It is EXPONENTIAL GROWTH OF AN UNSTABLE MODE from
+  the noise floor -- the signature of escaping a saddle along a direction with a positive
+  eigenvalue. On a linear axis it looks like a cliff; on a log axis it is a straight line, and
+  lambda is the escape eigenvalue.
+
+  This also explains why the plateau LOOKS like nothing is happening. Starting from a noise
+  floor of 0.005, exponential growth at lambda needs ~3600 steps to reach 0.1 whatever else is
+  going on. The 8250 steps before it are the mode growing from initialisation noise, invisible
+  until it clears the floor.
+
+ACCURACY TRACKS KEY-DEPENDENCE, NOT LOSS
+  corr(accuracy, sigma1) = +0.948
+  corr(accuracy, -loss)  = +0.872
+  final: sigma1 0.931, accuracy 0.990, diagonal mass 0.965 -- a vertex, not the barycentre.
+
+VERDICT ON THE REGISTERED PREDICTIONS
+  P1 sigma1 flat at ~0 through the plateau then rising sharply   HOLDS, with the correction
+     that "sharply" means exponentially, not discontinuously.
+  P3 accuracy tracks sigma1 rather than the loss                 HOLDS (+0.948 vs +0.872, and
+     the loss fell 4.48 -> 0.91 while accuracy did not move).
+  P2 singular values switching on IN SEQUENCE                    UNTESTABLE AT 2 PAIRS, since
+     R has rank at most 1 here. It needs 4 pairs, where rank can reach 3, and that run is
+     queued. P2 is the one that would explain why more pairs cost more than proportionally.
+
+The falsifier -- sigma1 rising smoothly from step 0 with accuracy following -- did not occur:
+sigma1 sat within noise of zero for 8250 steps first.
+
+=============================================================================
+4 PAIRS: NO ESCAPE IN 30,000 STEPS
+
+  2 pairs   escape at step ~8,250.  sigma1 -> 0.93, accuracy 0.969, diag mass 0.965
+  4 pairs   NO escape in 30,000.    sigma1 max 0.0172 (noise), final 0.0011,
+                                    sigma2 max 0.0124, sigma3 max 0.0063,
+                                    diag mass 0.2500 exactly, accuracy 0.214
+                                    loss still fell 4.51 -> 1.54
+
+So doubling the pairs takes the escape from ~8k steps to more than 30k -- at least 3.6x, and
+the run ended without finding it, so the true factor is unknown and larger. The loss fell by
+two thirds over those 30,000 steps while the assignment matrix sat at the exact barycentre:
+all of that learning is the value set and the positional prior, and none of it is binding.
+
+P2 IS THEREFORE UNTESTED, not confirmed and not refuted. The prediction was that sigma1,
+sigma2, sigma3 would switch on IN SEQUENCE with separate plateaus, one saddle per rank. You
+cannot observe a sequence of escapes when no escape occurs. Settling it needs a run long
+enough to reach the first one, and 30,000 steps is not it.
+
+WHAT THIS MEANS FOR THE PROJECT. The binding question is now decided, and the answer is
+neither of the two the session spent most of its time on:
+
+  NOT representability   the mechanism works by construction, and at 2 pairs the trained
+                         model reaches 0.97 accuracy with a near-permutation assignment.
+  NOT architecture       carve, bind-write and the level-2 term are indistinguishable from
+                         base across seeds -- they were all measured mid-plateau.
+  IT IS ESCAPE TIME      the plateau before binding appears grows steeply with the number of
+                         pairs: ~8k at n=2, >30k at n=4. That is the wall, and it is a
+                         property of the optimisation, not of the state.
+
+The practical consequence is that every recall experiment in this project that ran for 1,500
+to 3,000 steps was measuring the plateau, and none of them could have detected a difference
+between architectures even if one existed.

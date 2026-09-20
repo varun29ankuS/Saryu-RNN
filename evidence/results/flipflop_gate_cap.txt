@@ -1,0 +1,107 @@
+KROHN-RHODES FLIP-FLOP: the gate cap is not the missing component
+=================================================================
+
+HYPOTHESIS, registered before running
+  Krohn-Rhodes (1965): every finite transformation monoid divides an iterated wreath product of
+  FLIP-FLOPS (identity + constant maps) and PRIME GROUPS. Saryu's reflections supply the groups.
+  Its only constant-map-like element is the gate: g = 1 gives h_t = c_t. model.py clamps
+
+      g = ((1 - cos(g_proj(z))) / 2).clamp(max=0.90)
+
+  so g = 1 is unreachable, and the architecture might contain no flip-flop at all. That would
+  predict exactly what we measure: perfect state tracking (groups), zero binding (no flip-flop).
+
+  Stated before launching: "If g->1 lifts 4 pairs, we have a one-line fix with a 60-year-old
+  theorem behind it. If it doesn't, the flip-flop needs to be an ADDRESSABLE COMPONENT rather than
+  a scalar gate."
+
+TEST 1 -- 4-pair binding at gate_cap 0.999 and 0.9999 vs the 0.90 baseline
+  (evidence/rank_dynamics.py, PAIRS=4, D=128, NL=2, nh=2, adamw 1e-3)
+
+      arm                 step      ce     acc    diag    sig1
+      gate_cap=0.999      4000   1.931   0.245   0.250   0.0024
+      gate_cap=0.9999     4000   1.879   0.240   0.251   0.0034
+      baseline g<=0.90   15000   1.680   0.203   0.251   0.0029
+
+  No escape. diag pinned at the 1/4 barycentre, sigma_1 on the noise floor.
+
+TEST 2 -- IS THE CAP EVEN BINDING? (the control that invalidates test 1 as designed)
+  Trained 1500 steps at each cap and measured the gate distribution over 64 held-out sequences:
+
+      gate_cap=0.90    mean g 0.1165   max g 0.8160   frac g>0.5 0.0295   frac AT cap 0.0000
+      gate_cap=0.999   mean g 0.1165   max g 0.8160   frac g>0.5 0.0295   frac AT cap 0.0000
+
+  Bit-identical. The clamp never fires in either model: the largest gate any token produces is
+  0.816, below the 0.90 ceiling. Raising the cap is a NO-OP, so test 1 measures nothing about
+  flip-flops and both 12,000-step runs were killed at 4,000.
+
+WHAT THE NULL ACTUALLY SAYS
+  The flip-flop is not missing -- it is AVAILABLE AND UNUSED. g = 0.82 is very nearly the constant
+  map h_t = c_t, reachable inside the shipped cap, and gradient descent never routes binding
+  through it. Same shape as the idle second layer: the component exists, nothing addresses it.
+
+  And there are EIGHT of them. model.py:164
+
+      self.g_proj = nn.Linear(d, H)      # PER-HEAD scalar cos gate,  H = 8
+
+  is one independent gate per head, each governing d/H = 16 channels. So the recurrence already
+  contains 8 independently resettable blocks.
+
+  NOT a wreath product. K-R's wreath product requires one component's flip-flop to be driven by
+  another component's STATE. Here the H gates are all functions of the input z alone and the heads
+  never see each other, so this is a DIRECT product of 8 flip-flop-and-group factors -- strictly
+  weaker than what the theorem builds. Claiming the K-R decomposition is present would be claiming
+  a structure the code does not have.
+
+  The block count does match the arity numbers from the other direction:
+      partition sweep        w_min ~ 8, so arity ~ D / w_min = 8
+      arity_test product arm 1.000 at n = 8 on 8-wide slots
+      heads                  H = 8
+
+  THE SLOTS EXIST AND THE ROUTING IS EXPRESSIBLE BUT NEVER LEARNED. g_proj(z) reads z AFTER the
+  depthwise conv (kernel 4), so at a value position the gate already sees the preceding key: a
+  content-selected write is representable today. og(z) is query-dependent and out(s * silu(og(z)))
+  is bilinear in (state, query), so a content-selected read is representable too. Nothing makes
+  head k hold pair k because learning that assignment is learning a permutation -- the log2(n!) of
+  entropy that never appears in any run.
+
+  This is the FOURTH component in this session that exists, is reachable, and is not used: the
+  idle second layer, the level-2 term, the gate, and now the per-head routing. K-R guarantees the
+  decomposition EXISTS; it says nothing about gradient descent finding it.
+
+TEST 3 -- would a router fix it, even a perfect one? (evidence/arity_test.py, `hashed` arm)
+  A router without key-comparison addresses by the key alone: slot = hash(key) mod H. Two keys on
+  the same head SUPERPOSE. Registered before running: bounded by birthday statistics regardless of
+  how good the hash is.
+
+      pairs   chance   single   hashed   product   nested
+          2    0.500    0.948    0.953    1.000    1.000
+          3    0.333    0.580    0.875    1.000    1.000
+          4    0.250    0.410    0.833    1.000    1.000
+          8    0.125    0.195    0.600    1.000    1.000
+
+  The governing statistic is the PER-QUERY clash rate ((H-1)/H)^(n-1) = 0.670 at n=4 and 0.393 at
+  n=8 for H=8 -- not the global "no clash anywhere" rate (0.410 and 0.002), which is what a first
+  pass at this suggests and which would have mispredicted both numbers badly. Add partial credit
+  where a superposed slot's argmax still lands on the queried item and you get 0.833 and 0.600,
+  matching the measurement.
+
+  READ: a router is a REAL gain over today's architecture (0.195 -> 0.600 at n=8) and still decays
+  with n and never reaches 1. It is a broken matrix state, not a third option. Only the arm that
+  stores a key per slot and COMPARES (`product`) holds at 1.000, and that is the matrix state of
+  Addendum III. DeltaNet's update S_t = S_{t-1}(I - beta k k^T) + beta v k^T is exactly our
+  H(u,beta) acting on a matrix instead of a vector, and Siems et al. 2025 -- already cited in
+  model.py -- is n_h of them.
+
+CAVEATS KEPT
+  - Krohn-Rhodes is classical, not obscure, and was already in our bibliography as krohn1965,
+    cited in Paper B's related work and never used as a design principle.
+  - Test 1's null is uninformative on its own; only test 2 makes the result interpretable.
+  - The three arms of arity_test are by-construction simulations, not trained models. They bound
+    what each factorisation CAN do; they do not show training reaches it. Trained depth already
+    failed to chain the nested arm (nesting_depth.txt).
+
+WHERE THIS LEAVES THE OPEN CHOICE
+  It does not add a route. It removes one: "add a router" collapses into route (2), add a matrix
+  state to the recurrence, with a collision bug. The three routes remain (1) lean into tracking and
+  publish Paper B as-is, (2) matrix state, (3) heterogeneous heads with differing arity.

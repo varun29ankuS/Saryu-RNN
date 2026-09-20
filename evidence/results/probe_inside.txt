@@ -1,0 +1,124 @@
+LOOKING INSIDE: THE ANSWER IS NOT HIDDEN AT 4 PAIRS, IT IS ABSENT
+evidence/probe_inside.py. Linear probe from the hidden state at the QUERY position to the
+correct value, fitted on held-out data at every depth. A linear probe reads whatever is
+linearly present, so probe >> model means the readout is the bottleneck, and probe ~ model
+means the model is already extracting all there is.
+
+  tap           emb   L0_mix  L0_ffn  L1_mix  L1_ffn  final    model acc
+  2 pairs s0   0.024   0.032   0.023   0.998   0.998   0.998      0.993
+  2 pairs s1   0.022   0.172   0.147   0.987   0.987   0.987      0.990
+  4 pairs      0.026   0.034   0.036   0.250   0.245   0.248      0.245
+
+  chance 1/64 = 0.016.  Set-guessing at 4 pairs = 0.250.
+
+TWO FINDINGS.
+
+1. BINDING IS LOCALISED. At 2 pairs the association is absent through all of layer 0 and
+   appears in LAYER 1'S RECURRENCE, 0.032 -> 0.998. Replicated on a second seed
+   (0.172 -> 0.987). Not the embeddings, not the feed-forward, not layer 0. One site.
+
+2. AT 4 PAIRS IT IS NOT THERE AT ALL. The probe reads 0.250 -- equal to the model's own
+   accuracy and equal to set-guessing. The readout is extracting everything the state
+   contains. The state simply does not carry the key-value association.
+
+So the bottleneck is not the readout, and "present but unreadable" is ruled out. Every fix
+aimed at extraction would have been aimed at the wrong component.
+
+WHY, FROM THE MECHANISM. The recurrence is a linear update on ONE vector, so the state is a
+superposition h = sum_i A_i c_i. At read time exactly two things are available: the query
+token's transport T_q, and a fixed linear readout W. The output is
+
+    W T_q sum_i A_i c_i  =  sum_i (W T_q A_i) c_i
+
+and correct retrieval needs W T_q A_i ~ 0 for every i != q. That is ONE linear operator
+annihilating every non-matching item: a single matched filter, which extracts ONE component.
+Not a tuning constant -- a consequence of one vector and one query-dependent operator.
+
+Given the value set is known (in_set ~ 0.9), the assignment entropy is log2(n!):
+
+    n=2  1.00 bits   n=3  2.58 bits   n=4  4.58 bits   n=8  15.30 bits
+
+n=2 needs exactly ONE BIT and one matched filter delivers exactly that. n=4 needs 4.58 and
+gets none, which is why it lands exactly on set-guessing rather than degrading partway.
+Two pairs sits precisely at the structural limit, which is why it looked like success and
+generalised to nothing.
+
+REGISTERED PREDICTION, before the run: n=3 needs 2.58 bits, already past one filter's
+budget, so it should COLLAPSE to ~0.333 rather than landing near 0.7. A cliff supports the
+arity account; a graceful slope refutes it and points back at capacity. Run in progress.
+
+=============================================================================
+THE n=3 TEST: A CLIFF, NOT A SLOPE  (interim, run still in progress)
+
+Matched steps, muon lr 3e-4, n_h=2, gap 4. accuracy / sigma1:
+
+  step      n=2              n=3              n=4
+  1000   0.719  0.3989    0.240  0.0044    0.089  0.0045
+  2000   0.969  0.9686    0.333  0.0052    0.161  0.0032
+  3000   1.000  0.9844    0.359  0.0030    0.255  0.0047
+  5000   1.000  0.9849    0.333  0.0030    0.276  0.0048
+
+n=3 tracks n=4, not n=2. sigma1 sits at the 0.003 noise floor and accuracy sits on
+0.333 = 1/3, its own set-guessing baseline.
+
+THE REGISTERED PREDICTION SAID: if the limit is one matched filter ~ one bit, n=3 (2.58
+bits) COLLAPSES to ~0.333; if capacity degrades smoothly with d/n, n=3 lands near 0.7. It
+is at 0.333. The prediction holds so far, and the capacity reading does not.
+
+  pairs   bits needed   accuracy      verdict
+     2       1.00        1.000        affordable: one filter, one bit
+     3       2.58        0.333        set-guessing
+     4       4.58        0.250        set-guessing
+     8      15.30        0.034        even the SET fails (in_set 0.201)
+
+The cliff falls between n=2 and n=3 -- exactly where one bit runs out. Not a gradual
+squeeze on capacity but a structural budget that is either sufficient or not.
+
+CAUTION, KEPT DELIBERATELY: n=3 is at ~5000 of 15,000 steps. n=2 escaped at step 1000 with
+this optimiser, so 5000 is already 5x past it, but AdamW needed 10,000 at n=2 and this
+project has called plateaus early before. The verdict is interim until the run finishes.
+
+=============================================================================
+FINAL: n=3 NEVER ESCAPES. THE PREDICTION HOLDS.
+
+  n=3, 15,000 steps, muon lr 3e-4, n_h=2
+    max sigma1 over the whole run  0.0164      final 0.0011
+    diagonal mass                  0.3340      (barycentre 1/3 = 0.3333)
+    accuracy                       0.345       (mean over the last 10 evals)
+    escape (sigma1 > 0.05)         NEVER
+
+  pairs   bits = log2(n!)   accuracy   1/n     escape
+      2        1.00           1.000    0.500   step 1,000
+      3        2.58           0.345    0.333   never in 15,000
+      4        4.58           0.208    0.250   never in 15,000 (n_h 2 AND 8)
+      8       15.30           0.034    0.125   never; even the SET fails
+
+The registered prediction was: one matched filter ~ one bit means n=3 collapses to ~0.333,
+while smooth capacity degradation means n=3 lands near 0.7. It landed on 0.345, sitting on
+its own set-guessing baseline and indistinguishable in kind from n=4. A CLIFF, NOT A SLOPE.
+
+WHAT THE SESSION WAS MISSING, SETTLED
+
+The limit is not how MUCH the state holds -- not holonomy, not signatures, not the Birkhoff
+polytope, not the trace law's overlap. Those all measure capacity. The limit is ARITY: how
+many items can be SELECTED at read time.
+
+The recurrence writes one vector, so the state is a superposition sum_i A_i c_i. At read
+time only the query's transport T_q and a fixed readout W exist, so the output is
+sum_i (W T_q A_i) c_i and retrieval needs W T_q A_i ~ 0 for every i != q. One linear
+operator annihilating every non-match is ONE MATCHED FILTER, and one filter extracts one
+component. Given the value set is known (in_set ~ 0.9), the assignment costs log2(n!) bits.
+One filter buys about one. n=2 needs exactly one and is perfect; everything above gets
+nothing, and gets nothing the same way.
+
+WHY EVERY FIX FAILED
+  n_h 2 -> 8          reshapes the filter, does not add a second one
+  carving             protects a superposition that was never the problem
+  level-2 on output   the bottleneck is what the recurrence WRITES, not how it is read
+  optimiser (muon)    reaches the one-bit solution 10x sooner; cannot manufacture a 2nd bit
+
+WHAT WOULD FIX IT: a read-time comparison against every stored key at once -- keys in
+separate addressable rows rather than summed into one vector, so retrieval is a contraction
+against rows instead of one filter against a sum. That is a matrix state, and it is what
+softmax(q^T K)V does. The level-2 idea was right in kind and wrong in placement.
+

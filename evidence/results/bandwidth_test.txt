@@ -1,0 +1,15 @@
+BANDWIDTH vs PAIR COUNT   muon lr 0.0003, n_h 2, 2 layers, 4000 steps, 2 seeds
+n pairs stored, values drawn from m distinct symbols -> the read must deliver log2(m) bits
+
+ pairs  values   bits   chance   best top1   verdict
+--------------------------------------------------------------
+     2       2    1.0    0.500       0.785   SOLVED  (seeds 1.000, 0.570)
+     4       2    1.0    0.500       0.578   at chance  (seeds 0.570, 0.586)
+     4       4    2.0    0.250       0.277   at chance  (seeds 0.289, 0.266)
+     8       2    1.0    0.500       0.559   at chance  (seeds 0.570, 0.547)
+
+3812s
+READ
+  (4,2) and (8,2) solved  -> the limit is BITS AT THE READ, not pairs stored.
+                             "one reflection, one scalar" survives.
+  (4,2) at chance         -> the limit is the NUMBER OF PAIRS; bandwidth account fails.

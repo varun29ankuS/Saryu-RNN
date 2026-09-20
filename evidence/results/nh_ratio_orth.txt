@@ -1,0 +1,15 @@
+NH RATIO TEST  4 pairs, d=128 H=1 dh=128, muon lr 0.0003, 4000 steps, 3 seeds
+the construction ceiling per nh is from expressivity.txt (hand-built, untrained)
+
+  nh   tr/dh   built   solved   rate   best top1
+--------------------------------------------------
+   2   0.969   0.347      0/3   0.00       0.336   seeds 0.312, 0.336, 0.320
+   8   0.875   0.550      0/3   0.00       0.375   seeds 0.375, 0.312, 0.289
+  16   0.750   0.838      0/3   0.00       0.328   seeds 0.297, 0.328, 0.297
+
+14650s
+READ
+  solve rate climbs with nh, nh=32 reliable -> EXPRESSIVITY confirmed; the fix is a
+                                               sizing rule, nh ~ dh/4.
+  nh=32 fails like nh=2                     -> the construction misled; optimisation is
+                                               back and expressivity.txt is retracted.

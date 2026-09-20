@@ -1,0 +1,8 @@
+SIGN BINDING  4 pairs, d=128 H=8 dh=16 nh=2, 5000 steps, 3 seeds, chance 0.250
++-1 binding is an exact involution; the silu gate is not. 2x2 against the curriculum.
+
+  bind      cur   >0.8   >0.5  best per seed
+----------------------------------------------------
+ plain  uniform   0/3   0/3  0.328, 0.336, 0.289
+ plain     slow   0/3   1/3  0.562, 0.273, 0.320
+  sign  uniform   0/3   0/3  0.258, 0.242, 0.219

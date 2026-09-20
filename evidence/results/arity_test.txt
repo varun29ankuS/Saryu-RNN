@@ -1,0 +1,121 @@
+ARITY vs CAPACITY  total state D = 64 for BOTH arms, 400 trials, 2 reflections per bind
+single  = one factor of D, all pairs summed, one matched filter
+product = n slots of D/n (narrower!), one pair each, compared all at once
+
+ pairs   chance    single   product    slot dim
+--------------------------------------------------
+     2    0.500     0.948     1.000          32
+     3    0.333     0.580     1.000          21
+     4    0.250     0.410     1.000          16
+     8    0.125     0.195     1.000           8
+
+READ
+  single high at n=2 then collapsing to 1/n  -> one filter, one bit: ARITY
+  product staying high on NARROWER slots     -> factorisation is what matters
+  both collapsing together                   -> capacity, and the arity account fails
+
+=============================================================================
+READING IT
+
+Both arms hold exactly D = 64 numbers of state. The ONLY difference is whether those 64
+numbers are one factor or n factors. The product arm is additionally handicapped: at n = 8
+its slots are 8-dimensional, eight times narrower than the single arm's whole state.
+
+  single   0.948 -> 0.580 -> 0.410 -> 0.195   decaying toward chance as n grows
+  product  1.000 at every n, on narrower slots
+
+So the binding limit is FACTORISATION, not capacity. A bigger state does not help; a state
+split into separately addressable parts does, even when each part is small. That is the
+arity claim, tested with capacity held fixed.
+
+All three registered predictions hold. The falsifier -- both arms collapsing together --
+did not fire.
+
+ONE WRINKLE, RECORDED BECAUSE IT MATTERS. By construction the single arm degrades GRADUALLY
+(0.948, 0.580, 0.410, 0.195) while the TRAINED model collapses to exactly 1/n (0.345 at
+n=3, 0.208 at n=4). So training does not even reach the single-filter ceiling its own
+mechanism allows. Two limits compound:
+
+  arity        structural, and the subject of this test
+  escape time  training never finds the best available single-filter solution at n >= 3
+               (rank_dynamics: no escape in 15,000 steps at n = 3 or 4)
+
+Fixing arity alone would lift the ceiling; whether training then reaches it is a separate
+question, and the escape-time evidence says it may not without the optimiser work too.
+
+=============================================================================
+THE PARTITION TRADE-OFF: ARITY IS BOUNDED BY D / (MINIMUM BLOCK WIDTH)
+
+Same test, D = 64 held fixed, sweeping how finely the state is partitioned:
+
+  pairs   slot dim   single   product
+      2       32      0.948    1.000
+      4       16      0.410    1.000
+      8        8      0.195    1.000
+     16        4      0.095    0.848
+     32        2      0.052    0.090
+     64        2      0.013    0.007
+
+The product arm is perfect down to 8-wide blocks, frays at 4 (0.848) and collapses at 2
+(0.090). So a partition cannot be made arbitrarily fine: there is a MINIMUM VIABLE BLOCK
+WIDTH, below which a block can no longer hold a value distinguishably, and
+
+    addressable items  ~  D / w_min
+
+At D = 64 with w_min ~ 8 that is about 8 items, not 64.
+
+WHY THIS MATTERS FOR HOW THE FIELD FRAMES IT. Zoology and Based report that a bigger
+recurrent state gives better recall, and that is correct. But the mechanism here is not that
+a bigger state holds a bigger superposition -- the single-factor arm has the WHOLE 64
+dimensions and still decays to 0.195 at n = 8. A bigger state helps because it can be cut
+into more blocks. Size matters instrumentally, through the partition.
+
+THE DESIGN QUESTION IS THEREFORE A PARTITION, LITERALLY. Choosing how to spend D is choosing
+an integer composition D = d_1 + ... + d_k: k blocks buys arity k, each block gets width
+d_i, and the two trade against each other with a floor at w_min.
+
+NESTING BUYS WHAT FLATNESS CANNOT. A flat partition of 64 addresses ~8 items. A NESTED
+partition -- a refinement chain in the partition lattice, 8 groups each holding 8 -- reaches
+8 x 8 = 64 items while every block stays 8 wide, because it spends DEPTH instead of WIDTH.
+That is the same trade a page table or a trie makes, and it is why the L = 2 / 4 / 6 depth
+runs matter: sequential selection is depth-bounded, so a nested scheme needs the layers to
+chain.
+
+=============================================================================
+NESTING WORKS BY CONSTRUCTION; DEPTH ALONE DOES NOT DELIVER IT
+
+BY CONSTRUCTION, D = 64 held fixed for every arm:
+
+  pairs   chance   single   product(flat)   nested   flat block   nest block
+      8   0.125    0.195      1.000         1.000        8           21
+     16   0.062    0.095      0.848         1.000        4           16
+     32   0.031    0.052      0.090         1.000        2           10
+     64   0.016    0.013      0.007         1.000        2            8
+
+A flat partition spends WIDTH and dies at ~8 items, its blocks collapsing to width 2. A
+nested partition spends DEPTH: 64 items with blocks still 8 wide. Same 64 numbers of state.
+(An earlier version of this arm scored ~0.2 because the address digits were extracted
+little-endian and rebuilt big-endian, reversing the index. Fixed.)
+
+IN THE TRAINED MODEL, DEPTH DOES NOT CHAIN. 4 pairs, muon lr 3e-4, only depth varied:
+
+  depth   steps    max sigma1   final acc   diag mass   escape
+      2   15,000     0.0199       0.203      0.2510     NEVER
+      4   12,000     0.0258       0.260      0.2490     NEVER
+      6    9,500     0.0190       0.219      0.2500     NEVER
+
+Tripling the depth changes nothing. All three sit at the exact barycentre with sigma1 on the
+noise floor. By the nesting arithmetic L = 6 has 6 bits of addressing budget against the
+4.58 that 4 pairs needs -- it has the budget and does not use it.
+
+WHY, AND WHAT IT IMPLIES. Layers here read the same residual stream and write back to it in
+parallel; nothing makes layer k's read CONDITIONAL on layer k-1's selection. Hierarchical
+addressing needs exactly that conditionality -- resolve the group, THEN resolve within it --
+and stacking layers does not create it. The probe said the same thing from the other side:
+at 2 pairs layer 0 contributes nothing (0.032) while layer 1 does all the binding (0.998).
+An idle layer is not a second selection.
+
+So nesting requires explicit ROUTING machinery -- the later read must be a function of the
+earlier selection -- not merely more depth. That is a specific architectural proposal rather
+than a hyperparameter, and it is the honest end of this thread: the arithmetic is right, the
+by-construction result is right, and the trained model cannot reach it as currently built.

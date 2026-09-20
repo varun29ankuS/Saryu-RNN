@@ -1,0 +1,32 @@
+FOUR PAIRS: NEITHER THE OPTIMISER NOR n_h LIFTS IT
+evidence/rank_dynamics.py, 4 pairs, gap 4, Muon lr 3e-4, 15,000 steps each.
+
+             max sigma1   final sigma1   diag mass   accuracy   escape (sigma1 > 0.05)
+  n_h = 2       0.0199        0.0029       0.251       0.203      NEVER
+  n_h = 8       0.0410        0.0013       0.249       0.208      NEVER
+
+Both sit at the exact barycentre after 15,000 steps, with the optimiser that binds 2 pairs
+at step 1,000 and reaches accuracy 1.000 by step 4,000.
+
+WHAT THIS ELIMINATES
+
+  the optimiser   Muon is ~10x faster than AdamW at escaping this saddle (2 pairs: step 1,000
+                  against 10,000 at matched lr). It does not touch 4 pairs. AdamW also failed
+                  4 pairs at 30,000 steps. So the wall is not optimisation.
+  n_h, i.e. the   Raising reflections per token from 2 to 8 drops the trace-law overlap from
+  trace law's     0.766 to 0.344 -- the prescription's own definition of more binding
+  prescription    capacity -- and changes nothing: same barycentre, same accuracy, no escape.
+
+This is the THIRD failure of that prescription in a trained model. The n_h sweep made recall
+monotonically WORSE (nh_sweep_shortgap.txt, 0.113 -> 0.004); carving a memory subspace was
+within seed noise (multiseed.txt); and now 4x the reflections does nothing at 4 pairs.
+
+The trace law's ARITHMETIC is not in question -- overlap = (1-2/d)^k is verified exactly, and
+by construction a k = d/2 store recalls 1.000 at every gap. What has failed three times is
+the inference from that arithmetic to "therefore raise n_h in a trained model".
+
+WHAT REMAINS. Something changes between 2 and 4 pairs that is neither optimisation nor
+capacity-as-overlap. The next measurement is not another architecture arm: it is
+evidence/probe_inside.py, which fits a linear probe at every depth to ask whether the answer
+is PRESENT in the state at 4 pairs and merely unreadable, or genuinely absent. Those two
+have opposite fixes and nothing measured so far distinguishes them.

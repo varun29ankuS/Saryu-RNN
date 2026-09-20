@@ -1,0 +1,23 @@
+PROBE INSIDE  2 pairs, gap 4, muon lr 0.0003, n_h 2, 6000 steps
+chance = 1/64 = 0.016   rank-one readout would give 0.500
+
+    step 2000/6000  ce 1.280  243s
+    step 4000/6000  ce 1.294  411s
+    step 6000/6000  ce 0.000  567s
+
+  model accuracy on the same data: 0.990
+
+  tap         probe acc   reads the answer out of the residual stream
+  --------------------------------------------------------
+  emb             0.022
+  L0_mix          0.172
+  L0_ffn          0.147
+  L1_mix          0.987
+  L1_ffn          0.987
+  final           0.987
+
+READ
+  probe >> model  : the state carries the answer and the readout cannot extract it
+                    -- the bottleneck is the readout, not memory.
+  probe ~ model   : the model already uses what is there.
+  probe ~ 0.500   : the association is genuinely not in the state.

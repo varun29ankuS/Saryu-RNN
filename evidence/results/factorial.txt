@@ -1,0 +1,9 @@
+FACTORIAL  4 pairs, d=128 H=1 dh=128, nh FIXED at 17 in every cell, 4000 steps, 2 seeds
+one-factor designs are blind to combinations; this project's own construction says the
+effects ARE combinatorial (0.282 / 0.250 alone, 0.980 together)
+
+ bind  orth      cur   >0.8   >0.5  best per seed
+--------------------------------------------------------------
+    0 False  uniform    0/2    0/2  0.312, 0.289
+    0 False     slow    0/2    0/2  0.312, 0.289
+    0  True  uniform    0/2    0/2  0.344, 0.305

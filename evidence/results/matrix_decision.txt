@@ -1,0 +1,100 @@
+DECISION: MATRIX STATE WITH A CONTRACTING READ
+==============================================
+
+After 170+ runs, 21 architectural interventions and five reversed constructions, the architecture
+question is settled by a controlled comparison on 4-pair MQAR, chance 0.250.
+
+    cell                              state   params     best   converged by
+    transformer (reference)              --   290,370   1.000
+    matrix: rank-1 erase, read S q     1024   100,803   0.984   step 1500
+    vector: conv binding, unbind read  1024   616,772   0.836   still rising at 6000
+    both, split budget                  996   362,229   0.938   step 1500
+    saryu: vector, diagonal gate       ~3k    387,218   0.32    never
+
+The matrix wins on every axis simultaneously: highest accuracy, SIX TIMES fewer parameters at the
+same state size, and convergence in a quarter of the steps (0.91 at step 1500 where the vector is
+at 0.11).
+
+The pairing is NOT complementary. At equal state budget the hybrid lands between the two arms
+(0.938), which is dilution rather than synergy. Nothing is gained by carrying both.
+
+WHAT SETTLED IT, IN ORDER
+ 1. A BASELINE, which this project never had. A 290k transformer solves the task 3/3 where our
+    387k recurrence never exceeded 0.39 in 170 runs. The task is solvable; the wall is ours.
+ 2. A WORKING RECURRENT REFERENCE. The first DeltaNet here scored 0.13 because it had no short
+    causal convolution -- the component arXiv 2609.16183 names as dominant, which I had read and
+    not applied. With it: 0.094 -> 0.961 at the same learning rate.
+ 3. LEARNING RATE RULED OUT. DeltaNet needs 3e-3; Saryu diverges there (loss 4.03) and at 1e-2
+    (4.18). 1e-3 was already its stability limit, so the 170 runs were not under-tuned.
+ 4. THE VECTOR ROUTE TESTED PROPERLY. Its first implementation sat at chance loss for 5000 steps
+    because unitary normalisation x/|x| annihilates the magnitude gradient. Fixed with a
+    straight-through estimator, it reaches 0.836 -- real, but strictly dominated.
+
+WHY, AS A DERIVATION
+    h_T = a_T T_T [ sum_t M_{t->T-1} b_t ] + b_T
+The query sits at position T, so its transport factors out of every term: a common rotation
+reorients all stored items together and cannot select one from a sum. At nh=2 that transport is
+within 4% of the identity anyway (tr/dh = 0.957 on the 25M checkpoint). Selection therefore rested
+entirely on a DIAGONAL gate. S q = sum_i v_i (k_i . q) is the item axis a diagonal gate does not
+have. DeltaNet's transition (I - beta k k^T) is additionally RANK ONE: targeted at one key, leaving
+items with orthogonal keys untouched, where Saryu rotates the whole state every token.
+
+That last point also dissolves the "tracking and memory are antagonistic" law this project derived.
+It is not a law. It is the difference between applying the same Householder operator targeted
+versus globally.
+
+WHAT THIS RETIRES
+Twenty-one interventions all modified the transport, the write, or the training order. None touched
+the read. Sign binding -- the cheapest operator with an exact inverse, O(d), capacity matching
+convolution at a tenth the cost -- trained WORSE than its control (0.258 vs 0.289-0.336), which is
+exactly what this diagnosis predicts: a better binding is worthless when the read cannot select.
+
+AND IT RETIRES THE METHOD THAT PRODUCED MOST OF THE WRONG TURNS
+Five constructions predicted ~0.97 and trained at 0.25-0.31: the nh ladder, the key-bound write,
+sign binding, wide-vector-beats-matrix, and the orbit account. Constructions here verify the
+mathematics and have NO demonstrated predictive value for what gradient descent finds. They are
+sanity checks, never evidence for a direction.
+
+WHAT IS KEPT
+The Householder-product transition, which is genuinely ours and is DeltaProduct's contribution, now
+applied to a matrix state. The chunk-parallel kernel. The state-tracking results, which were never
+in question. And the instrumentation -- failure decomposition, the three-way read probe, exact
+contribution isolation -- which no paper in the test-time-recurrence literature currently has.
+
+WHAT IS ADOPTED
+Matrix state, rank-one targeted erase, contraction read, short causal convolution. This is what
+Qwen3-Next (36 Gated DeltaNet + 12 Gated Attention, 3:1) and Kimi Linear (20 KDA + 7 MLA) ship.
+We are adopting a known design, not inventing past it, and the honest framing of any writeup should
+say so.
+
+ADDENDUM -- the two results that closed it after the decision was made
+
+CROSSOVER. The one argument that could have reversed this was capacity scaling: a matrix holds
+~sqrt(state) items where a vector holds ~state/log(state), so the vector should overtake as load
+rises. Trained at equal state (1024 floats, lr 3e-3, 6000 steps):
+
+    pairs   chance   matrix   vector
+        4    0.250    0.984    0.844
+        8    0.125    0.984    0.023
+
+The vector does not overtake. It COLLAPSES between 4 and 8 items while the matrix is untroubled.
+The construction had put the vector at 0.993 for 128 pairs; trained, it dies at 8. Seventh counting
+argument falsified today.
+
+HEAD STRUCTURE. The same reasoning said capacity/float ~ 1/dk, so many small heads should hold more
+at fixed state. At 1024 floats:
+
+    H    dk   cap~H*dk    p=4     p=8
+    1    32         32   0.984   0.922
+    4    16         64   0.820   0.477
+   16     8        128   0.688   0.188
+
+Fewer, bigger heads win decisively. The arithmetic assumed perfect routing across heads, and that
+routing is learned -- badly. Sixth falsified counting argument.
+
+A VOID TEST, recorded so it is not mistaken for a null. The hysteretic write gate (theta_t =
+alpha + (beta-alpha)(1-g_{t-1})) was tested against a memoryless gate in an otherwise identical
+cell. Both arms scored BELOW CHANCE at 2 pairs (0.305 and 0.281 against 0.500), because I gave the
+cell the weak diagonal-gate read deliberately, to isolate the write, and it is too weak to solve
+2 pairs at all. There was no working baseline for an improvement to appear against. Hysteresis is
+UNTESTED, not refuted.

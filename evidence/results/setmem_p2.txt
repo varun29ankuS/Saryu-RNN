@@ -1,0 +1,17 @@
+TRACE  arm=base  2 pairs, gap 4, seqlen 10, d=128, 2 layers, 387,218 params
+lr=0.0003, 3000 steps, chance top1 0.016, chance top5 0.078, chance loss 4.159
+
+  step    loss    top1    top5   inset      p0     p1     ret    lvl2    gnorm
+------------------------------------------------------------------------------
+     1   4.477   0.008   0.083   0.023   0.011  0.005    14.7     nan   42.509
+   500   3.891   0.036   0.182   0.081   0.061  0.015    16.9     nan   11.773
+  1000   1.911   0.432   0.888   0.930   0.718  0.177    16.5     nan   17.233
+  1500   1.310   0.490   0.995   0.984   0.613  0.379    18.2     nan   18.443
+  2000   1.273   0.497   1.000   0.995   0.403  0.581    19.4     nan   21.074
+  2500   0.936   0.482   1.000   0.997   0.508  0.458    17.1     nan   18.516
+  3000   0.876   0.487   1.000   0.997   0.547  0.433    16.6     nan   17.750
+
+260s
+READING IT: p3 high with p0..p2 at chance = a memory that holds one fact.
+  top5 high with top1 low = the value is there and the readout cannot rank it.
+  ret below the gap = the state cannot span the distance at all.

@@ -1,0 +1,38 @@
+MULTI-SEED REPLICATION: THE ARCHITECTURE DIFFERENCES WERE SEED NOISE
+3 arms x 3 seeds, 4 pairs, gap 4, 3000 steps, d=128, 2 layers.
+chance top1 = 0.016.  1/pairs = 0.250.
+
+  arm            seeds                  mean     sd     range
+  base           0.247, 0.214, 0.242    0.234   0.015   0.034
+  carve+bind     0.219, 0.260, 0.198    0.226   0.026   0.063
+  sig2           0.237, 0.240, 0.203    0.227   0.017   0.036
+
+  carve+bind vs base   -0.009   0.29x the pooled seed spread   INSIDE NOISE
+  sig2       vs base   -0.008   0.35x the pooled seed spread   INSIDE NOISE
+
+WHAT THIS RETRACTS. Earlier in the session, at 1500 steps and ONE seed, carve+bind read
+0.184 against base 0.113 and was reported as a 63% improvement. It is not an improvement.
+At three seeds and to convergence the three arms are indistinguishable, and the earlier gap
+was two artefacts stacked: single-seed noise (spread up to 0.063 within an arm) and scoring
+before convergence (base moves 0.195 -> 0.247 between steps 1500 and 3000).
+
+The same applies to every other architecture comparison run at 1500 steps with one seed:
+base-wide, carve, sig2-anti. None of them is supported.
+
+WHAT SURVIVES. All three arms converge to ~0.23, just under 1/pairs = 0.250, with in_set
+near 0.9. Carving the memory subspace, binding the write, and adding a level-2 term all
+land on the same set-membership ceiling. The ceiling is the finding; the arms are not.
+
+THE OPEN PROBLEM THIS LEAVES. sig2 SHOULD have escaped: by construction a level-2 store is
+1.000 at every gap and pair count (memory_mechanisms.txt), and linear attention solves MQAR
+routinely in the literature. It did not escape here, and the branch was demonstrably alive
+(||r_out|| grows from 0 to 2.13; its contribution is 12-18% of the output norm). So either
+
+  the implementation is inadequate  -- it is a readout branch added to the block OUTPUT, not
+                                      a second-order term inside the recurrent STATE, and it
+                                      has no feature map, or
+  learnability, not representability -- the mechanism exists but gradient descent does not
+                                      find it at this scale, lr and step budget.
+
+Those are distinguishable and neither is tested yet. What is NOT supported is any claim that
+a level-2 term has been shown to help this model.

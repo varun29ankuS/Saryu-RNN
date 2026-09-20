@@ -1,0 +1,19 @@
+OVERWRITE TASK  muon lr 0.0003, n_h 2, 2 layers, 5000 steps, 6 seeds
+each key written R times at random interleaved positions; target is its LAST value
+solve rate = fraction of seeds reaching top1 > 0.80 (escape is BIMODAL, so the
+mean over seeds is not a meaningful statistic)
+
+ keys   R   solved   rate | on disagreeing samples:  correct  glob_last  key_other  off_key
+-------------------------------------------------------------------------------------------
+    2   1      2/6   0.33 |                            0.667      0.333      0.000    0.000
+          seeds 0.547, 1.000, 0.617, 0.555, 1.000, 0.594
+    2   2      0/6   0.00 |                            0.468      0.516      0.001    0.015
+          seeds 0.547, 0.547, 0.578, 0.570, 0.492, 0.547
+
+5582s   checkpoints in <repo>/checkpoints\overwrite
+READ
+  control R=1 solve rate low        -> harness unusable, fix before reading anything
+  R=2 solve rate << R=1             -> overwriting is a real trained failure
+  global_last dominant on failures  -> the model has GLOBAL recency (decay) and lacks
+                                       PER-KEY recency, which is the missing erase
+  off_key dominant                  -> binding itself failed; a different problem

@@ -1,0 +1,14 @@
+CELL SHOOTOUT  4 pairs, d=128, 1024 state floats for delta and hrr, 5000 steps, 3 seeds, chance 0.250
+transformer reference on this exact task: 1.000
+
+    cell    params   state  best per seed
+----------------------------------------------------
+   delta   100,387    1024  0.133, 0.148, 0.164
+     hrr   611,396    1024  0.039, 0.039, 0.031
+   saryu   387,218    1024  0.328, 0.336, 0.289
+
+2573s
+READ
+  delta solves, hrr solves -> a vector state with an unbinding read is enough
+  delta solves, hrr fails  -> the MATRIX does the work; the vector route is dead
+  neither solves           -> a selecting read is not sufficient either

@@ -1,0 +1,25 @@
+ASSIGNMENT MATRIX  4 pairs, gap 4, 3000 steps, seed 0
+  step 750/3000  loss 4.048  72s
+  step 1500/3000  loss 3.530  146s
+  step 2250/3000  loss 2.631  221s
+  step 3000/3000  loss 2.523  296s
+
+M[i,j] = P(value of pair j | key of pair i queried), renormalised to the n values present.
+Barycentre would be 0.250 in every cell.
+
+          val0  val1  val2  val3     row entropy
+  key0  0.290 0.286 0.252 0.172      1.367 / 1.386
+  key1  0.290 0.286 0.253 0.172      1.367 / 1.386
+  key2  0.290 0.288 0.251 0.171      1.366 / 1.386
+  key3  0.291 0.286 0.251 0.172      1.367 / 1.386
+
+  diagonal mass (correct pairing) : 0.250   (barycentre 0.250)
+  mean off-diagonal               : 0.250
+  mean |M - barycentre|           : 0.0392
+  mean row entropy                : 1.367  (max 1.386)
+  mean |row - mean row|           : 0.0004  (0 = every key behaves identically)
+
+VERDICT
+  RANK-ONE BIAS: rows are identical but not uniform. The model has learned a
+  preference over VALUES that ignores the key. Not binding, and not the
+  barycentre either.

@@ -1,0 +1,28 @@
+DOES A LEVEL-2 TERM GIVE THE MODEL A MEMORY?
+MQAR 4 pairs, 2 layers, lr=0.0003, 1500 steps, seeds [0], chance 0.016
+
+  sig2        d=128  params   518,306
+  sig2-anti   d=128  params   518,306
+
+arm              gap 4    gap 64
+--------------------------------
+      sig2 gap4 500/1500 loss 4.086 30s, 59s left
+      sig2 gap4 1000/1500 loss 3.896 61s, 30s left
+      sig2 gap4 1500/1500 loss 3.646 93s, 0s left
+      sig2 gap64 500/1500 loss 4.175 109s, 218s left
+      sig2 gap64 1000/1500 loss 4.149 219s, 109s left
+      sig2 gap64 1500/1500 loss 4.166 330s, 0s left
+sig2             0.113     0.020
+      sig2-anti gap4 500/1500 loss 4.049 35s, 71s left
+      sig2-anti gap4 1000/1500 loss 3.592 70s, 35s left
+      sig2-anti gap4 1500/1500 loss 3.442 107s, 0s left
+      sig2-anti gap64 500/1500 loss 4.171 116s, 232s left
+      sig2-anti gap64 1000/1500 loss 4.156 235s, 117s left
+      sig2-anti gap64 1500/1500 loss 4.169 351s, 0s left
+sig2-anti        0.113     0.016
+
+  for reference, same protocol: base 0.113 / 0.012, carve+bind 0.184 / 0.020 (carve_test.txt)
+
+REGISTERED PREDICTIONS
+  P1 sig2 at gap 4 > 0.40:  0.113 -> FAILS
+  P2 sig2 at gap 64 > 0.30: 0.020 -> FAILS

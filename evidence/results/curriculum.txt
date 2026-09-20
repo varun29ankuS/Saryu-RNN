@@ -1,0 +1,18 @@
+CURRICULUM  4 pairs, target gap 4, muon lr 0.0003, d=128 H=8 nh=2 nl=2, 6000 steps, 4 seeds
+THE ARCHITECTURE IS IDENTICAL IN EVERY ARM. Only the order of the data changes.
+accuracy is always measured at the TARGET difficulty (4 pairs, gap 4)
+
+      arm   solved   rate  best per seed
+--------------------------------------------------------
+  uniform      0/4   0.00  0.336, 0.312, 0.328, 0.320
+      gap      0/4   0.00  0.289, 0.312, 0.289, 0.305
+    pairs      0/4   0.00  0.773, 0.320, 0.344, 0.312
+    gated      0/4   0.00  0.156, 0.250, 0.219, 0.203
+
+10403s
+READ
+  a curriculum arm crosses 0.8 -> the wall is OPTIMISATION and the fix is the data
+                                  order, not the architecture. Fifteen interventions
+                                  were the wrong axis.
+  everything at 0.32           -> the published curriculum result does not transfer
+                                  here, and our wall is not the one they broke.

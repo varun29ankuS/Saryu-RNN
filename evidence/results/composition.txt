@@ -1,0 +1,139 @@
+CAN THE MEMORY COMBINE TWO FACTS INTO A THIRD? Direction is the whole story.
+===========================================================================
+
+THE GAP THIS CLOSES. Every test in this repository stores facts and asks for one back. Nothing has
+ever asked the memory to COMBINE two stored facts into one it was never shown. That is a different
+capability from recall and we had no measurement of it.
+
+The clean form is transitive inference: store A->B and B->C, query A, expect C. It needs something
+MQAR never does -- CHAINING two retrievals, which means using depth as sequential lookup. The
+linear probe showed binding forms at layer 1's mix while layer 2 sits idle, so there was a specific
+reason to expect chaining to fail.
+
+SETUP. HRR store, d = 1024, m = 256 unitary symbols, n stored edges x -> y, follow a k-step chain
+never stored as a single fact. Cleanup (snap to the nearest known symbol) at every hop.
+
+RESULT 1 -- COMMUTATIVE BINDING CANNOT CHAIN, AND THE REASON IS EXACT.
+
+     n edges   k |    comm      dir
+           8   1 |   0.980    0.980
+           8   2 |   0.503    0.970
+           8   3 |   0.140    0.977
+           8   4 |   0.033    0.970
+           8   6 |   0.000    0.973
+
+          32   1 |   0.897    0.943
+          32   2 |   0.417    0.887
+          32   3 |   0.080    0.820
+          32   6 |   0.003    0.710
+
+          64   1 |   0.690    0.780
+          64   2 |   0.253    0.600
+          64   3 |   0.047    0.517
+          64   6 |   0.003    0.243
+
+  comm = S = sum x (*) y.  Circular convolution is COMMUTATIVE, so x0 (*) x1 = x1 (*) x0 and a
+  stored edge HAS NO DIRECTION. Unbinding at x1 returns its predecessor x0 and its successor x2
+  with equal weight: the chain cannot tell forward from backward, which is why k=2 lands on 0.503,
+  a coin flip, even though k=1 is perfect. Not noise accumulation -- a symmetry.
+
+  dir = S = sum x (*) rho(y), a fixed coordinate permutation applied to the target. That breaks the
+  symmetry, and chain length becomes nearly free: flat at ~0.97 out to six hops at n=8. Capacity
+  still binds at larger n (0.24 at n=64, k=6), but commutative binding is dead by hop three at
+  every size.
+
+  Using a permutation for roles is standard VSA practice (Plate, Kanerva, Gayler), so "direction
+  matters" is not a new claim in that literature. What is worth recording is the size of it: it is
+  the difference between no compositional capability at all and six free hops.
+
+RESULT 2 -- RETRACTED AND REVERSED. THE MEMORY CAN VERIFY, VIA THE MARGIN.
+  I first wrote: "retrieval confidence barely separates correct from wrong derivations (0.012 at
+  n=32 k=3), so the memory produces a novel combination and has no signal for whether it is true."
+  That was a DIFFERENCE OF MEANS on max codebook similarity -- the wrong statistic on the wrong
+  signal. Scored properly as AUC (the probability the signal ranks a correct derivation above a
+  wrong one, 0.50 = no information):
+
+      n    k     acc   max sim   margin   min margin   round trip
+     16    2   0.953     0.703    0.960        0.974        0.654
+     16    3   0.938     0.744    0.976        0.959        0.686
+     16    4   0.910     0.881    0.964        0.983        0.800
+     32    2   0.890     0.637    0.888        0.873        0.639
+     32    3   0.827     0.748    0.919        0.893        0.655
+     32    4   0.802     0.821    0.903        0.926        0.775
+     64    2   0.615     0.743    0.788        0.793        0.630
+     64    3   0.505     0.815    0.808        0.773        0.655
+     64    4   0.382     0.836    0.793        0.781        0.678
+
+  MARGIN (top-1 minus top-2 similarity) reaches AUC 0.96-0.98 where MAX SIMILARITY manages
+  0.70-0.88. The reason is structural: in a superposition the absolute overlap is dominated by the
+  store's total energy, so it says how much is in memory rather than whether THIS answer is right.
+  The margin is scale-free and asks the question that matters -- was the runner-up close?
+
+  MIN MARGIN ACROSS HOPS is as good or better on long chains (0.983 at n=16, k=4), because it
+  catches a wrong turn at any point rather than only at the end.
+
+  ROUND TRIP (walk back from the endpoint and check it returns to the start) is WEAKER than the
+  margin, 0.63-0.80, which I did not expect -- the reverse walk has its own error rate, so it adds
+  noise as well as evidence.
+
+  The corrected claim: a superposed memory CAN tell its true combinations from its false ones, at
+  AUC ~0.97 on moderate stores, provided the signal is the margin rather than the confidence. This
+  degrades with load (0.79 at n=64) but stays informative even where accuracy has fallen to 0.38.
+
+RESULT 3 -- IS A HOUSEHOLDER ROLE OPERATOR ENOUGH TO GIVE DIRECTION? Yes, above a threshold.
+  Replacing the permutation with a product of `nref` MUTUALLY ORTHOGONAL Householder reflections
+  applied to the target (an exact involution, so it is its own inverse). d = 1024, n = 16 edges:
+
+      role operator      tr(R)/d     k=1     k=2     k=3     k=4     k=6
+      1 reflection         0.998   0.960   0.468   0.204   0.072   0.004
+      2 reflections        0.996   0.940   0.484   0.172   0.056   0.004
+      8 reflections        0.984   0.928   0.496   0.220   0.068   0.008
+      32 reflections       0.938   0.960   0.716   0.480   0.300   0.164
+      128 reflections      0.750   0.964   0.932   0.916   0.888   0.872
+      512 (= d/2)          0.000   0.988   0.960   0.936   0.904   0.900
+      permutation            --    0.980   0.952   0.932   0.892   0.880
+      commutative            --    0.972   0.492   0.100   0.032   0.000
+
+  The controlling quantity is tr(R)/d = 1 - 2*nref/d, how unlike the identity the role operator is.
+  One or two reflections in 1024 dimensions leave it at 0.998 and chaining is indistinguishable
+  from commutative. Somewhere past tr/d ~ 0.94 direction appears, and by 0.75 it matches a
+  permutation.
+
+  WHAT THIS SAYS ABOUT THE SHIPPED MODEL. Reflections act inside a head, dh = d//H = 16, with
+  nh = 2, so tr(R)/dh = 1 - 4/16 = 0.750 -- exactly the row that reaches permutation-level
+  chaining. Per head, Saryu's reflections are ALREADY strong enough to break the direction
+  symmetry. The ratio nh/dh is what matters, not nh, and this project has repeatedly swept nh while
+  holding dh fixed without noticing that the relevant quantity is their ratio.
+
+  IMPORTANT CAVEAT. This test orthogonalises the axes via QR. v_proj normalises each axis and never
+  orthogonalises them against each other, and non-orthogonal axes do not give an involution
+  (measured earlier: error 1.06 at k=8), so the decode would not be exact. Orthogonality is a
+  second requirement and the model does not meet it.
+
+WHY THIS MATTERS FOR SARYU SPECIFICALLY
+  HOUSEHOLDER REFLECTIONS DO NOT COMMUTE. Non-commutativity is the property this project has spent
+  a week treating as the reason the architecture is good at state tracking and useless for memory.
+  Result 1 says a commutative binding is precisely what CANNOT support directed relational memory,
+  and direction is what chaining needs. So the architecture's signature property is the one a
+  convolution store lacks.
+
+  This is a statement about potential, not about the shipped model. Saryu applies its reflections as
+  TRANSPORT to the whole state, not as a per-fact binding role, so the non-commutativity is not
+  currently encoding direction for anything. It is the EIGHTH mechanism this session found to be
+  present, reachable, and unused by training -- after the idle layer, the level-2 term, the gate,
+  the per-head routing, orthogonal axes, selective writing, and the delta write.
+
+BUG FOUND AND FIXED IN MY OWN HARNESS
+  The first version of this test had a `raw` (no-cleanup) arm whose final readout correlated the
+  estimate against a ZERO vector, so it returned 0.000 for every configuration. That column was
+  meaningless and is not reported. Cleanup-versus-raw is therefore still unmeasured here.
+
+OPEN / NOT CLAIMED
+  - Constructions. Nothing trained. Symbols are handed over, not learned.
+  - A coordinate permutation is not a Householder reflection. That non-commutativity in general
+    preserves direction does not establish that OUR transport does, in the place the model applies
+    it. That is the next test and it has not been run.
+  - The n=64 degradation is unexplained and no capacity law is fitted.
+  - Chain lengths beyond 6 and stores beyond 64 edges are unmeasured.
+  - Result 2 uses one confidence statistic (max codebook similarity). A better-calibrated signal
+    may exist; the claim is that the obvious one does not work.

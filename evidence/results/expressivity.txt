@@ -1,0 +1,66 @@
+IS IT EXPRESSIVITY OR OPTIMISATION? Expressivity -- and nh=2 is the ceiling.
+===========================================================================
+
+THE QUESTION. Nine mechanisms this session were shown to work by construction and none survived
+training, which looked like an optimisation problem: the architecture can represent the solution
+and gradient descent will not find it. Fable's review named the test that settles it -- hand-build
+the MQAR solution in the parameter space. If no setting achieves it, the limit is EXPRESSIVITY. If
+a setting exists and training misses it, the limit is OPTIMISATION. These need opposite programmes
+of work and every other experiment here is downstream of the answer.
+
+THE CONSTRUCTION. The exact shipped recurrence, h_t = (1-g) H(u_t,beta_t) h_{t-1} + g c_t, with
+every quantity SET BY HAND and nothing trained:
+  - entity embeddings: random unit vectors
+  - binding: the value is reflected by nh MUTUALLY ORTHOGONAL axes derived deterministically from
+    the preceding key (an exact involution, trace dh-2nh, so it is its own inverse at read)
+  - transport: beta = 0 everywhere except the query position
+  - read: beta = 2 on the query key's axes -- the transport IS the unbinding
+  - readout: nearest entity embedding
+This is the best use of the only key-times-value interaction the parameterisation offers.
+
+RESULT. Accuracy with no training, 400 trials:
+
+  dh = 128           n=2     n=4     n=8    n=16
+    nh=1   tr/dh .984   0.525   0.320   0.188   0.075
+    nh=2   tr/dh .969   0.560   0.347   0.195   0.075   <- SHIPPED
+    nh=8   tr/dh .875   0.897   0.550   0.285   0.138
+    nh=16  tr/dh .750   0.995   0.838   0.470   0.230
+    nh=32  tr/dh .500   1.000   0.973   0.792   0.435
+    nh=64  tr/dh .000   1.000   0.998   0.905   0.575
+
+  dh = 93 (the 25M checkpoint's head width)
+    nh=2   tr/dh .957   0.588   0.325   0.188   0.083   <- SHIPPED
+    nh=8   tr/dh .828   0.945   0.637   0.360   0.142
+    nh=23  tr/dh .505   1.000   0.965   0.738   0.350
+    nh=46  tr/dh .011   1.000   1.000   0.897   0.505
+
+THE ANSWER. At nh = 2 NO hand-built solution reaches four pairs: the ceiling is 0.347 at dh=128 and
+0.325 at dh=93. The TRAINED model reaches 0.21-0.25 on the same task. Training is therefore at
+60-72% of the constructible optimum, not a factor of three below it.
+
+  IT IS EXPRESSIVITY. The model is near the limit of what two reflections can represent, and the
+  nine "available but unused" mechanisms were never sufficient at nh=2. This REVERSES the
+  optimisation reading recorded in flipflop_gate_cap.txt, binding_vs_tracking.txt and
+  composition.txt, which each treated a construction that worked as proof that training was the
+  gap. The constructions worked because they were free to use as many reflections as they liked.
+
+  The fix is quantified rather than guessed: nh ~ dh/4 gives 0.97 at four pairs, nh ~ dh/2 gives
+  1.000. For the shipped checkpoint that is nh = 23 to 46 against the 2 it has.
+
+WHY THE TRACE LAW ALREADY SAID THIS. tr(H)/d = 1 - 2nh/dh is how unlike the identity the operator
+is. At nh=2, dh=93 it is 0.957: the binding barely moves a vector, so the read cannot annihilate
+the non-matching items. Paper B publishes this law. We derived it, published it, and then spent the
+week testing capacity, geometry, gating, routing and optimisers without applying it to nh.
+
+OPEN / NOT CLAIMED -- and the caveat here is load-bearing
+  - THIS IS ONE CONSTRUCTION. Failing to build a solution at nh=2 is not a proof that none exists.
+    The evidence that it is a real ceiling is circumstantial but consistent: the trained model lands
+    at the same place, and the trace law explains why.
+  - The construction covers REFLECTION-based binding. The real model has an FFN and a depthwise
+    conv, so the write c can be an arbitrary nonlinear function of the last few tokens -- it could
+    in principle compute a multiplicative binding that is not a reflection. That family is NOT
+    tested here and is the obvious way the expressivity conclusion could be wrong.
+  - Idealised embeddings, no conv, no FFN, single layer, single head.
+  - The cost of the fix is not free: nh ~ dh/2 reflections cost O(dh^2/2) per head, which is
+    matrix-state cost. trained_geometry.txt records that a permutation buys direction for O(d);
+    whether something similarly cheap buys separation is unknown.

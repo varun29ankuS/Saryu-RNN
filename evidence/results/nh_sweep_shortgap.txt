@@ -85,3 +85,20 @@ correction is now in paper A Section 5.5 and paper B Section 8.
 WHAT WOULD ACTUALLY BE NEEDED: a read path that applies the inverse transport of the
 query, and a way to protect a stored pair from the transports of intervening tokens --
 a different architecture, not a different n_h.
+
+=============================================================================
+CAPACITY AND PERSISTENCE FAIL SEPARATELY  (n_h = 2, d_h = 16, chance 0.016)
+
+  pairs \ gap        0        4       64
+      1          1.000    1.000    0.012
+      2          0.711        -        -
+      4          0.199    0.113    0.012
+
+Read across: any number of facts dies by gap 64 -- a RETENTION failure, the state is
+overwritten by filler.
+Read down: at zero distance, 1 fact is perfect, 2 is shaky, 4 is nearly gone -- a
+CAPACITY failure, independent of distance.
+
+So "it tracks state but not contents" is exactly right, and the contents limit is about
+one fact at short range. Both axes have to be fixed for this to be a memory; neither is
+fixed by n_h (see above, where raising n_h made both worse).

@@ -1,5 +1,5 @@
 WHERE A TRAINING STEP'S TIME GOES ON A GPU, AND A FREE 3-6x FROM THE CHUNK SIZE
-Measured 2026-09-16 on one Tesla T4, torch 2.10, repo at a9eb319.
+kaggle/profile (YOUR_KAGGLE_USERNAME/saryu-profile), 2026-09-16, Tesla T4, torch 2.10, repo at a9eb319.
 Exactness on device first: max |chunkwise - sequential| = 4.77e-07.
 
 SHARE OF A FULL TRAINING STEP (forward + backward + optimiser), chunk size 8 as shipped:
@@ -34,3 +34,26 @@ depends on the shape (32 at L=128, 64 at L=512), so it is a parameter, not a new
 WHAT THIS DOES TO THE FUSED-KERNEL PLAN. After the chunk fix the recurrence is roughly 10-25% of a
 step rather than 35-72%, so the ceiling on a hand-written Triton kernel drops sharply. Re-profile
 with the new default before spending days on a kernel that cannot be tested off-GPU.
+
+================================================================================================
+CORRECTED PROFILE: THE END-TO-END EFFECT, MEASURED (2026-09-16, T4, repo at b48cb38)
+The first profile built the model at the library default and called chunkwise() with an explicit C,
+so it re-measured the shipped configuration whatever training used, and the "2.5x faster step" I
+inferred from it was NOT measured. This version constructs the model at the chunk under test.
+
+  shape                        step C=8    best C    step      speedup   recurrence share at best
+  5M   d=328 B=48 L=128        189.1 ms      32     129.8 ms    1.46x      63.5% -> 31.8%
+  5M   d=328 B=8  L=512        648.2 ms      64     119.1 ms    5.44x      72.7% -> 53.1%
+  25M  d=744 B=48 L=128        441.0 ms      32     387.5 ms    1.14x      34.2% -> 17.0%
+  25M  d=744 B=8  L=512        694.6 ms      64     299.8 ms    2.32x      66.9% -> 26.4%
+
+Exactness on device: max |chunkwise - sequential| = 3.58e-07; chunk sweep differences <= 3.3e-06.
+
+WHAT IT MEANS FOR A FUSED KERNEL. At the shipped chunk the recurrence was 35-73% of a step, which
+looked like a strong case for writing one. At the best chunk it is 17-53%, and the configuration
+that matters for the comparison runs (25M, long context) went from 695 ms to 300 ms for free. A
+hand-written Triton kernel would now be competing for the remainder, cannot be tested off-GPU, and
+needs a fused BACKWARD to help training at all. It is no longer the next thing to build.
+
+CAVEAT: batch 48 at context 128 gains least (1.14x at 25M) because the recurrence is already a small
+share there; the gain is largest exactly where we need it, at long context.

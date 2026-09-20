@@ -1,0 +1,44 @@
+THE PRECONDITIONER AMPLIFIES THE ESCAPE, IT DOES NOT CHANGE THE ROUTE
+evidence/rank_dynamics.py, 2 pairs, gap 4, lr 3e-4 for BOTH arms, seed 0, sampled every 50.
+
+  step        MUON  ce / acc / sigma1        ADAMW  ce / acc / sigma1
+   300      4.034  0.042  0.0107             4.059  0.031  0.0113
+   500      2.685  0.214  0.0034             2.918  0.318  0.0063
+   750      1.648  0.385  0.0007             1.785  0.432  0.0010
+  1000      1.118  0.719  0.3989             1.583  0.458  0.0066
+  1500      0.363  1.000  0.9775             1.496  0.474  0.0037
+  2500      0.013  0.995  0.9989             1.276  0.542  0.0043
+
+SAME ROUTE. Up to step ~750 the two are indistinguishable in kind: loss falls 4.48 -> ~1.7
+while sigma1 sits on the noise floor. Both learn the marginal -- the value set and the
+positional prior -- first, and both sit at the rank-one saddle. A hypothesis that muon
+"goes at binding directly, with no plateau" was proposed here and is WRONG; muon has a
+plateau too, of about 750 steps.
+
+DIFFERENT ESCAPE RATE. What differs is how fast the unstable mode grows once it is moving:
+
+  muon    sigma1 0.0007 -> 0.3989 in 250 steps    lambda ~ 0.025 per step
+  adamw   fitted over its escape                  lambda = 0.00145 per step   (17x slower)
+
+  escape step:  muon ~1000,  adamw ~8250 at lr 1e-3 and not at all by 2500 at lr 3e-4.
+
+So the preconditioner does not select a different solution; it multiplies the escape
+eigenvalue of the saddle it was always going to leave. That is the conditioning hypothesis,
+stated precisely, and it is the first version of it this project has supported.
+
+WHY IT IS PLAUSIBLE. Muon replaces the momentum by the orthogonal factor of its polar
+decomposition, so every singular direction of a weight matrix takes an equally sized step.
+The unstable direction here is a SMALL singular direction; AdamW's per-coordinate scaling
+leaves it under-weighted, while orthogonalisation gives it a full-size step. An earlier note
+in this file's neighbourhood argued the opposite -- that equalising would SUPPRESS a mode
+that needs scale separation to grow. The data says the reverse.
+
+CAVEATS THAT STILL STAND
+  one seed. This project has already produced two single-seed results today that dissolved
+    under replication.
+  2 pairs only. At 4 pairs muon has not escaped by step 3000 (muon_p4_nh2.txt), so the
+    4-pair wall is not merely an optimiser artefact.
+  the language model is NOT tested. evidence/results/optimizer_5m.txt compared the two on
+    enwik8 and found a tie -- but it swept muon at 0.01/0.02/0.04 with the best at the
+    BOTTOM edge, i.e. upward from its optimum, which is the same error made here today. That
+    comparison should be redone below 0.01 before any of this is claimed to transfer.

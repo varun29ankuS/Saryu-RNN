@@ -1,0 +1,108 @@
+THE GEOMETRY OF THE TRAINED MODEL -- measured, not constructed
+==============================================================
+
+WHY. Nine mechanisms this session were shown to work BY CONSTRUCTION and none was shown to survive
+training. Almost all our geometry describes what the architecture COULD represent. This file is the
+other kind: measurements on the shipped 25M checkpoint and real enwik8, with no hand-built vectors
+anywhere.
+
+    checkpoint  d = 744, H = 8, dh = 93, nh = 2, 4 layers, vocab 481
+
+1. BETA IS PINNED AT A PURE REFLECTION -- so no volume is lost, and my hypothesis was wrong.
+   det H(u,beta) = 1 - beta, so the transport preserves volume only at beta = 0 or 2, and beta = 1
+   is exactly SINGULAR (I - u u^T is a projection that destroys a dimension permanently). The
+   worry was that a trained model drifts into the contracting middle and quietly loses rank.
+
+      layer 0-1   beta median 2.000, min 1.998
+      layer 2     beta median 1.998, min 1.947
+      layer 3     beta median 1.988, min 1.964
+      fraction with |1-beta| < 0.2 (near singular): 0.000 everywhere
+
+   The model kept pure reflections and never approaches the singularity. b_proj weight norms grew
+   from 0 at init to 4.11/4.95/5.09/5.43, so input dependence WAS learned -- beta varies with the
+   token while staying near 2. Volume-loss hypothesis: DEAD.
+
+2. THE TRANSPORT IS RANK 2 IN A 93-DIMENSIONAL HEAD. This is the thing we overlooked.
+   Two reflections rotate ONE 2-plane out of 93. The whole project has called this "the transport"
+   without noting how little of the state it moves:
+
+      tr(R)/dh = 1 - 2*nh/dh = 1 - 4/93 = 0.957
+
+   composition.txt measured the chaining threshold on exactly this quantity: at tr/d = 0.984
+   chaining is indistinguishable from commutative binding (0.496 at k=2), at 0.938 it is partial
+   (0.716), and only by 0.750 does it match a permutation. The 25M model sits at 0.957 -- in the
+   failing band. Reaching the working band needs nh ~ dh/2 ~ 46 reflections per head against the 2
+   it has.
+
+   CORRECTION TO MY OWN CLAIM. An hour before this I said the model's heads were dh=16 with nh=2,
+   giving tr/dh = 0.750 and landing in the working band. That was the small TEST model (d=128).
+   The real checkpoint is dh=93 and lands in the failing band.
+
+   DESIGN RULE, and it runs against normal practice: dh grows with model width while nh stays
+   pinned at 2, so LARGER MODELS GET MONOTONICALLY WORSE at directed relation. The quantity to
+   hold fixed is the RATIO nh/dh. Every nh sweep in this project varied nh with dh held constant
+   and so never saw the ratio.
+
+3. THE COST ASYMMETRY THAT SETTLES THE DESIGN.
+   Direction from reflections costs O(nh*dh) per head, and nh ~ dh/2 makes that dh^2/2 -- exactly
+   what a matrix state costs. Direction from a PERMUTATION costs O(d) and, per composition.txt,
+   buys the same six free hops. So reflections are the expensive way to purchase something a
+   permutation gives away, and the cheap route to directed relational memory is convolution
+   binding plus a permutation role.
+
+4. THE STATE IS NOT SPARSE. Participation ratio (sum lam)^2 / sum lam^2 of the per-head state
+   covariance over real text, out of dh = 93:
+
+      layer 0   58.3 53.0 58.9 59.6 56.7 58.5 58.9 60.1    mean 58.0
+      layer 1   63.8 61.9 60.2 63.0 61.8 64.2 62.0 60.0    mean 62.1
+      layer 2   62.6 59.2 58.3 60.9 60.7 61.0 61.2 57.3    mean 60.1
+      layer 3   44.0 25.9 33.8 47.0 45.7 45.6 37.5 35.7    mean 39.4
+
+   60-67% of every head is carrying variance in layers 0-2. The hypothesis that capacity failures
+   are explained by the model using a handful of its dimensions is FALSE. Layer 3 compresses to
+   ~39, which is what a readout layer should do.
+
+5. THE TIMESCALE LADDER EMERGED BY ITSELF, IN THE DEEPER LAYERS. Gate retention 1/g per head:
+
+      layer 0   12 13 13 13 14 14 15 16
+      layer 1   11 12 13 13 14 14 14 17
+      layer 2   14 14 15 16 19 20 86 132
+      layer 3   15 19 22 23 25 28 48 49
+
+   Three separate attempts to install this by hand (timescales, freeze_gate_bias, gate_ceiling)
+   all collapsed to 2-3 tokens within 1000 steps (gate_timescales.txt). Training produced it
+   unaided at depth, with heads at 86 and 132 tokens in layer 2. Where we intervened it died;
+   where we left it alone it appeared.
+
+6. EFFECTIVE CONTEXT SATURATES NEAR 256 CHARACTERS. Loss at the final position with only the last
+   k characters visible, 512 independent samples per k:
+
+      k        loss      SE    vs full
+      4      1.6014  0.0694    +0.6509
+      8      1.2190  0.0653    +0.2684
+      16     1.0611  0.0608    +0.1106
+      32     0.9844  0.0584    +0.0339
+      64     0.9654  0.0589    +0.0149
+      128    0.9554  0.0589    +0.0049
+      256    0.9511  0.0589    +0.0006
+      512    0.9505  0.0589    +0.0000
+
+   Paired over the same samples, k=16 is worse than full context by +0.1106 +- 0.0185, t = 5.98 --
+   so the model really does use long context. But 256 -> 512 is worth +0.0006. The documented
+   "stops using context at about 512 characters" is generous; the measured saturation is ~256.
+
+   MY OWN FIRST READING OF THIS WAS NOISE. With 16 samples at one position the k=8 loss came out
+   equal to full and k=16 came out BETTER, which would have said the effective context was eight
+   characters. The spread across k was 0.997-1.084 against a per-sample SE far larger than the
+   differences. Recorded because it is the fourth time in this session that an under-powered
+   measurement produced a dramatic and false reading.
+
+OPEN / NOT CLAIMED
+  - One checkpoint. Nothing here is a scaling law, including the nh/dh rule, which is a prediction
+    from the construction in composition.txt applied to this model's numbers, not a trained result.
+  - Participation ratio measures variance, not information. A head could spread variance over 60
+    directions and still carry little task-relevant content in them.
+  - The effective-context measurement truncates the input, which also removes the conv's left
+    context; at k = 4 that confounds the two. It should not matter by k = 32.
+  - The emergent timescale ladder is a description of one trained model, not evidence that it is
+    what makes the model work.

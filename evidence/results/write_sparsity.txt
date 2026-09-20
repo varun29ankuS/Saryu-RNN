@@ -1,0 +1,17 @@
+WRITE SPARSITY  4 pairs, d=128 H=1 dh=128, nh=2, muon lr 0.0003, 6000 steps, 4 seeds
+the read is DIAGONAL -- out(s * silu(og(z))) -- so items must occupy different
+coordinates to be separable; predicted capacity is dh/k
+
+ write_topk   dh/k   solved   rate  seeds
+--------------------------------------------------------
+      dense      0      0/4   0.00  0.312, 0.328, 0.336, 0.312
+         32      4      0/4   0.00  0.336, 0.352, 0.312, 0.391
+         16      8      0/4   0.00  0.336, 0.312, 0.312, 0.289
+          8     16      0/4   0.00  0.320, 0.312, 0.305, 0.289
+
+18899s
+READ
+  solve rate rises as k falls -> capacity is set by WRITE SPARSITY; the diagonal read
+                                 is the constraint and dh/k is the number of slots.
+  every arm at ~0.32          -> the diagonal-read account is wrong too, and the
+                                 attractor is not about the code support either.

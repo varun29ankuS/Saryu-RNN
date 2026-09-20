@@ -1,0 +1,211 @@
+TRACKING AND BINDING ARE ANTAGONISTIC -- and "one vector = one bit" was wrong
+=============================================================================
+
+WHERE THIS CAME FROM. Asked to look at nature and biology. The binding problem is a named problem
+in neuroscience -- von der Malsburg 1981 called it the SUPERPOSITION CATASTROPHE: a distributed
+code that sums "red circle" and "blue square" cannot say which colour went with which shape. The
+useful part is what biology does NOT do about it. It does not grow the vector. Dentate gyrus
+expands entorhinal input ~5x at ~1-2% sparsity; cerebellar granule cells expand mossy input by
+four orders of magnitude (Marr 1969, Albus 1971); fly olfaction maps 50 projection neurons to
+~2000 Kenyon cells at ~5% activity (Dasgupta, Stevens & Navlakha 2017). EXPANSION and
+SPARSIFICATION, to make codes pseudo-orthogonal so superposition stops colliding.
+
+TEST 1 -- IS "ONE VECTOR = ONE MATCHED FILTER = ONE BIT" TRUE? No.
+  Holographic Reduced Representations (Plate 1995; Kanerva) bind many pairs into ONE vector:
+  h = sum_i k_i (*) v_i, unbound by k_q* (*) h. Measured at d = 64, 600 trials:
+
+      binding operator                    n=2     n=3     n=4     n=8
+      HRR, circular convolution         1.000   0.998   0.983   0.892
+      k Householder reflections, k=2    0.942   0.563   0.420   0.193
+      k Householder reflections, k=8    1.000   0.923   0.800   0.440
+      k Householder reflections, k=32   1.000   1.000   0.992   0.860
+
+  A single vector of d=64 binds EIGHT pairs at 0.89. So Addendum III step 5 -- "a single matched
+  filter extracts one component; this follows from having one vector and one query-dependent
+  operator" -- is FALSE. HRR has one vector and one query-dependent operator and extracts one of
+  eight. RETRACTED.
+
+  The correct statement: one query-dependent operator selects one item only if the read RANDOMISES
+  the non-matching items away. Two Householder reflections randomise almost nothing -- the trace
+  law we already publish gives 1 - 2/d per reflection -- so the "matched filter" leaves ~94% of
+  every non-matching item sitting in place. "Arity" was the wrong NAME for the measured cliff, not
+  a wrong measurement: the product arm and the high-k single arm are two routes to the same thing,
+  orthogonality of non-matching items at read time.
+
+ARITHMETIC CORRECTION that kills the obvious fix. model.py:144 sets dh = d // H = 16, and mix()
+  returns u as [B,L,H,nh,dh] -- reflections act INSIDE a 16-dim head, not across d=128. So the
+  per-reflection trace is 1 - 2/16 = 0.875 and the already-run nh=8 sweep was at 0.875^8 = 0.344
+  crosstalk, past the point where the ideal table says n=4 should work. It measured 0.208.
+  Therefore nh=32 is NOT the fix and was not run. The ideal-to-trained gap is the whole story.
+
+TEST 2 -- WHAT IS THE SELF-INVERSION CONDITION? k MUTUALLY ORTHOGONAL axes.
+  ||(prod_k H)^2 - I||_F / ||I||_F and trace/dh, dh = 16, 200 draws:
+
+       k   random axes   orthogonal axes   trace/dh rand   trace/dh orth
+       1        0.0000            0.0000          0.8750          0.8750
+       2        0.2590            0.0000          0.7643          0.7500
+       4        0.6549            0.0000          0.5871          0.5000
+       8        1.0648            0.0000          0.3459         -0.0000
+
+  k mutually orthogonal Householder axes give a reflection through a (dh-k)-subspace: an EXACT
+  involution at every k, with trace dh - 2k. At k = dh/2 the trace is exactly 0 -- complete
+  decorrelation AND perfect self-inversion at once. Random axes give one or the other, never both.
+  This is Kanerva/Gayler sign-flip binding. v_proj normalises each axis and never orthogonalises
+  them against each other, so the shipped model has neither property.
+
+TEST 3 -- THE STRUCTURAL ARM: simulate the recurrence itself, best case everywhere else.
+  Unbound write, transport by every subsequent token, read = the query token's own reflections,
+  fixed codebook. dh=16, gap 4, 500 trials. Swept the gate across the range the model actually
+  learns (it learns g ~ 0.05):
+
+      gate     plain n=4   plain n=8   invert n=4   invert n=8
+      0.50         0.238       0.114        0.222        0.128
+      0.10         0.194       0.114        0.182        0.118
+      0.05         0.218       0.126        0.174        0.124
+      0.02         0.214       0.122        0.182        0.126
+
+  And with every repair applied at once -- pre-bound write, exact-inverse read, nh raised to dh/2,
+  orthogonal involution axes -- it is still at chance:
+
+      nh=2  random      invert    n=2 0.496  n=3 0.306  n=4 0.174  n=8 0.124
+      nh=8  random      invert    n=2 0.480  n=3 0.330  n=4 0.274  n=8 0.126
+      nh=8  ORTHOGONAL  invert    n=2 0.480  n=3 0.358  n=4 0.258  n=8 0.136
+
+  TWO BUGS IN THIS ARM, both mine, both found after committing it:
+    1. A first pass used gate 0.5, where the first pair decays by 0.5^13 before the query. That
+       null measured decay, not binding, and is superseded by the sweep above.
+    2. WORSE: each token's BINDING axes and its TRANSPORT axes were the same array. So the query
+       token transported the state by H_kq and the read then applied H_kq^-1 -- the two cancel,
+       and the read never touched the stored binding at all. The "every repair applied at once"
+       null therefore measured nothing. Rerun with the two roles drawn independently; the numbers
+       above stand only for the plain arm.
+
+THE BLOCKER -- FIRST STATEMENT WAS WRONG, CORRECTED HERE
+  I first wrote: "item i is multiplied by prod_{s>i} H_s, a different operator per item fixed by
+  position, so one read-time operation can invert at most one of them -- the transport destroys the
+  READ." Test 4's own rows refute that. Transport ON with a bound write and an inverse read gives
+  0.230 at n=4; transport OFF with an unbound write gives 0.220. Equal. If the transport were what
+  destroyed the read, removing it alone would help. It does not. Only transport-off AND bound write
+  reaches 0.402.
+
+  CORRECTED: TWO things are missing, and no arm in this project has ever had both.
+
+    (a) There is no key-value PRODUCT anywhere. The write is c = c_proj(z) plus g, linear in the
+        conv window, so nothing multiplicative binds a value to its key. Without that there is
+        nothing for a read-time operator to invert, transport or no transport.
+    (b) The per-head transport SCRAMBLES whatever binding does get in. At dh=16 with nh=2 random
+        axes, prod_{s>i} H_s is ~11 near-identity reflections in a random subspace: enough to break
+        the match between the binding operator and its inverse, not enough to decorrelate anything.
+
+  So the accurate claim is that the transport destroys BINDING, not that it destroys the read, and
+  it only matters once a binding exists to destroy. That is weaker and more specific than the
+  "explains every null in one line" sentence I committed, which is withdrawn: the nulls are
+  explained by (a) alone for the arms that had no product, and by (a)+(b) together for carve +
+  bind_write, which supplied a write reflection but kept the transport on.
+
+  bind_write in model.py is (a), and it has only ever been tested with the transport ON. The
+  transport-free configuration that Test 4 says matters has never been trained.
+
+TEST 3/4 CORRECTED -- transport axes and binding axes drawn INDEPENDENTLY
+  (dh=16, nh=2 random, gate 0.05, 500 trials). This supersedes the two tables below, which were
+  run with the shared-axes bug.
+
+      transport   bound write     n=2     n=3     n=4     n=8    effect at n=4
+           on           off     0.488   0.296   0.254   0.100    (the shipped model)
+           on            on     0.536   0.374   0.308   0.146    +0.054
+          off           off     0.508   0.304   0.260   0.102    +0.006
+          off            on     0.726   0.528   0.442   0.194    +0.188
+
+  The effect is an INTERACTION. A key-value product with the transport still on buys 0.054. Turning
+  the transport off with no product buys 0.006 -- nothing. Doing both buys 0.188, more than three
+  times the sum of the parts. That is the corrected form of the blocker, and it is why no single
+  intervention this session ever moved the number: every one of them supplied at most one half.
+
+  SELECTIVE WRITING is a third factor of the same size. The recurrence writes at EVERY token, so
+  keys, separators and fillers all inject noise that scales as sqrt(#writes)/dh. Writing only at
+  value positions:
+
+      dh   fillers     n=4     n=8    n=16
+      16      yes     0.624   0.354   0.162
+      16       no     0.836   0.526   0.252
+      64      yes     0.854   0.604   0.330
+      64       no     0.996   0.826   0.492
+
+  At dh=64 with selective writes, n=8 reaches 0.826 against HRR's 0.892 -- so most of the gap I
+  called "not yet explained" was this artefact, and only a small spectrum term remains. Biology
+  gates encoding rather than writing continuously (Hasselmo's acetylcholine switch between encode
+  and retrieve in hippocampus). The model can already express this: the write is gw = g * softplus
+  (w_raw), so a near-zero write at non-value positions is representable. It is the sixth reachable
+  component this session that training does not use.
+
+TEST 4 (SUPERSEDED -- shared-axes bug, kept for the record) -- REMOVE THE TRANSPORT
+      transport  bound write   axes      n=2     n=3     n=4     n=8
+           True         True   rand    0.528   0.298   0.230   0.128
+          False        False   rand    0.514   0.370   0.220   0.136
+          False         True   rand    0.712   0.486   0.402   0.222
+          False         True   orth    0.692   0.532   0.386   0.182
+
+  Removing the transport nearly doubles 4-pair binding, and only then do reflections start to pay:
+
+      nh   axes      n=2     n=3     n=4     n=8    n=12
+       1   rand    0.592   0.432   0.340   0.182   0.116
+       2   rand    0.712   0.486   0.402   0.222   0.176
+       4   orth    0.792   0.636   0.490   0.244   0.192
+       8   orth    0.856   0.740   0.594   0.346   0.256
+
+  With transport, nh never helped in any trained run. Without it, nh climbs monotonically and the
+  orthogonal involution axes overtake random ones from nh=4 up. Still short of HRR's 0.892 at n=8,
+  and the remaining gap is width: these heads are dh = d//H = 16, while HRR ran at d = 64.
+
+WHAT BIOLOGY SAYS ABOUT EXACTLY THIS CONFLICT
+  It does not solve it in one circuit. Complementary Learning Systems (McClelland, McNaughton &
+  O'Reilly 1995): hippocampus does fast, sparse, pattern-separated binding; neocortex does slow
+  distributed statistics; they are separate BECAUSE the representations are incompatible -- pattern
+  separation and generalisation pull opposite ways. Kanerva's Sparse Distributed Memory (1988) was
+  itself a cerebellum model, which is the same line as the VSA algebra above.
+
+  That maps onto the open routes as: heterogeneous heads, some transporting (tracking) and some
+  not (binding), with the binding heads WIDER and their axes orthogonalised -- rather than one
+  homogeneous head type asked to do both.
+
+OPEN / NOT CLAIMED
+  - All four tests are by-construction simulations. They bound what each structure CAN do; they do
+    not show training reaches it. This session has shown that gap five times.
+  - Paper B section 8's "associative store at k ~ d/2" stays WITHDRAWN. The ideal table is
+    consistent with it, but no trained model has shown it, and dh=16 makes k ~ d/2 mean k=8, which
+    was already tested and failed.
+TEST 5 -- EXPANSION: widen the binding head. No transport, bound write, nh = dh/2 orthogonal
+  (the full involution), 400 trials.
+
+      dh   nh=dh/2      n=2     n=4     n=8    n=16    n=32
+      16         8    0.868   0.613   0.375   0.165   0.062
+      32        16    0.910   0.733   0.512   0.237   0.107
+      64        32    0.943   0.860   0.625   0.340   0.152
+     128        64    0.968   0.930   0.755   0.485   0.242
+     256       128    0.993   0.975   0.845   0.652   0.320
+
+      current model: dh = 16, nh = 2, WITH transport  ->  0.230 at n = 4
+
+  Capacity grows monotonically with width, as the expansion argument predicts. The shipped
+  configuration sits in the worst cell of this table: the narrowest head, the fewest reflections,
+  and the transport still on. Changing only the transport and the axis constraint, at the SAME
+  dh = 16, already gives 0.613 at n = 4 against the current 0.230.
+
+  It does NOT reach HRR at matched width: dh = 64 gives 0.625 at n = 8 where HRR at d = 64 gives
+  0.892. Two causes, one of them an unfair comparison:
+
+    - FILLER NOISE, and it is my arm's fault, not the architecture's. This arm writes a random
+      vector at every key, separator and filler position, because the recurrence writes at every
+      token. At n = 32 that is 64 key writes plus 4 fillers against 32 value writes, and the noise
+      grows as sqrt(#writes)/dh -- which is why n=32 stays at 0.32 even at dh=256. The HRR arm
+      writes only values. Quantified in the fillers on/off sweep.
+    - SPECTRUM. An involution through a dh/2-subspace has only eigenvalues +-1, so different keys'
+      operators stay correlated; circular convolution spreads phase and decorrelates further. This
+      part is real and not yet explained.
+
+  So orthogonal-Householder binding is a large improvement on what we ship, and part of the
+  remaining gap to convolution is an artefact of comparing a write-every-token recurrence against
+  a write-values-only store.
+
+OPEN / NOT CLAIMED (continued)
+  - The width sweep is by construction like the rest. Nothing here has been trained.

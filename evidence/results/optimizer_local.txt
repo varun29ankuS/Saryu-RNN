@@ -1,0 +1,36 @@
+ADAMW AGAINST MUON ON SARYU -- LOCAL CPU RUN
+scripts/train.py, 2026-09-16. 969,121 parameters (d=144, 4 layers, 8 heads, 2 reflections),
+context 128, batch 16, 1200 steps, WSD schedule, gradient clipping 1.0, z-loss 1e-4, identical data
+order per seed. Only the optimiser differs. In muon mode the embeddings, the head and every 1-D
+parameter stay on AdamW at 1e-3; the quoted rate is Muon's own. Corpus: first 4M characters of
+enwik8, vocabulary 121. Evaluation scores identical text at both lengths (EVAL_ANCHOR=1024).
+
+           arm   s/step   bpc@128   bpc@512
+adamw@0.001 s0    0.608    2.2395    2.1854
+adamw@0.001 s1    0.422    2.2597    2.2042
+adamw@0.001 s2    0.736    2.2397    2.1877
+  muon@0.02 s0    0.532    2.2434    2.1940
+  muon@0.02 s1    0.552    2.2490    2.1989
+  muon@0.02 s2    0.816    2.2469    2.1935
+
+              mean bpc@128   mean bpc@512   seed spread @128   seed spread @512
+adamw@0.001         2.2463         2.1924             0.0202             0.0188
+  muon@0.02         2.2464         2.1955             0.0056             0.0054
+
+WHAT IT SAYS
+1. No difference in loss. The means are 2.2463 against 2.2464 at context 128 -- a gap of 0.0001,
+   which is 1/200th of AdamW's own seed-to-seed spread. At 512 AdamW is ahead by 0.003, still
+   inside the noise. At this size and budget the two optimisers are indistinguishable.
+2. Muon was markedly more CONSISTENT: its seed spread is 0.0056 against AdamW's 0.0202 at 128, and
+   0.0054 against 0.0188 at 512 -- about a quarter of the variance, at both lengths. With three
+   seeds this is a weak estimate, but the pattern is the same in both columns.
+3. The wall-clock column is unusable. Three identically sized arms took 0.42, 0.61 and 0.74 s/step
+   for AdamW alone; this laptop's timing varies by ~40% run to run. Muon's real cost (its
+   Newton-Schulz orthogonalisation) has to be measured on the T4, where arms run back to back.
+4. NOT a tuned comparison: one default rate each (AdamW 1e-3, Muon 0.02). The rate sweep at 5M
+   (kaggle/optim, three rates per optimiser) is what decides adoption; this run only establishes
+   that nothing dramatic happens either way, and that a fair test needs either many more seeds or a
+   larger model.
+
+An earlier, shorter version of this run (400 steps, 2 seeds) gave the same verdict with the seeds
+split one each way.

@@ -1,0 +1,10 @@
+
+2 pairs  acc 0.996   gradient reaching each position (relative to the query):
+  0:key  1:val  2:key  3:val  4:fill  5:fill  6:fill  7:fill  8:SEP  9:query
+  1.041  0.487  0.397  0.347  0.295  0.256  0.786  0.604  0.563  1.000
+  write positions get 0.3475-0.4868 of the query gradient
+
+4 pairs  acc 0.254   gradient reaching each position (relative to the query):
+  0:key  1:val  2:key  3:val  4:key  5:val  6:key  7:val  8:fill  9:fill  10:fill  11:fill  12:SEP  13:query
+  2.413  3.875  2.979  3.976  3.096  4.033  3.073  3.927  2.960  2.346  2.329  1.323  1.154  1.000
+  write positions get 3.8755-4.0331 of the query gradient

@@ -1,0 +1,520 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Saryu runs</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 16 16%27%3E%3Crect width=%2716%27 height=%2716%27 rx=%274%27 fill=%27%23c2410c%27/%3E%3C/svg%3E">
+<style>
+  :root{
+    --bg:#f6f7f9; --panel:#fff; --sunk:#f2f3f6;
+    --fg:#101418; --dim:#5b6472; --faint:#98a1b0;
+    --line:#e3e7ec; --line2:#eef1f5;
+    --ok:#127a4d; --warn:#9a6400; --bad:#b3263f;
+    --okbg:#e8f5ee; --warnbg:#fdf3e0; --badbg:#fdecef;
+    --shadow:0 1px 2px rgba(16,20,24,.05), 0 4px 16px rgba(16,20,24,.04);
+    --r:12px;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0e1013; --panel:#161a1f; --sunk:#1b2027;
+    --fg:#e8ecf1; --dim:#9aa5b4; --faint:#6b7684;
+    --line:#252b33; --line2:#1e242b;
+    --ok:#4cb98a; --warn:#d7a33e; --bad:#e0708a;
+    --okbg:#12261d; --warnbg:#2a2113; --badbg:#2b151b;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 6px 20px rgba(0,0,0,.25);}}
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--bg);color:var(--fg);
+    font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,sans-serif;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility}
+  .num{font-variant-numeric:tabular-nums;
+       font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+
+  header{position:sticky;top:0;z-index:20;display:flex;align-items:center;gap:16px;
+    padding:14px 24px;background:color-mix(in srgb,var(--panel) 88%,transparent);
+    backdrop-filter:saturate(1.6) blur(10px);border-bottom:1px solid var(--line)}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:660;letter-spacing:-.01em;
+         font-size:15px}
+  .brand .m{width:9px;height:9px;border-radius:3px;background:linear-gradient(135deg,#f0a132,#c2410c)}
+  .stat{display:flex;gap:14px;color:var(--dim);font-size:12.5px;align-items:center}
+  .live{width:7px;height:7px;border-radius:50%;background:var(--ok);
+        box-shadow:0 0 0 3px color-mix(in srgb,var(--ok) 22%,transparent);
+        animation:pulse 2s ease-in-out infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  .grow{margin-left:auto}
+
+  main{max-width:1440px;margin:0 auto;padding:22px 24px 64px}
+  section{margin-bottom:22px}
+  .eyebrow{font-size:11px;font-weight:660;letter-spacing:.12em;text-transform:uppercase;
+    color:var(--faint);margin:0 0 10px}
+  .panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+    box-shadow:var(--shadow)}
+
+  /* KPI strip */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:12px}
+  .kpi{padding:14px 16px}
+  .kpi .l{font-size:11.5px;color:var(--dim);display:flex;align-items:center;gap:6px}
+  .kpi .v{font-size:27px;font-weight:640;letter-spacing:-.02em;margin-top:3px;line-height:1.12}
+  .kpi .s{font-size:11.5px;color:var(--faint);margin-top:1px}
+  .kpi.verdict .v{font-size:17px;font-weight:620}
+
+  /* hero */
+  .split{display:grid;grid-template-columns:minmax(0,2.1fr) minmax(300px,1fr);gap:16px}
+  @media(max-width:1000px){.split{grid-template-columns:1fr}}
+  .pad{padding:16px 18px}
+  .tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:12px;background:var(--sunk);
+    padding:3px;border-radius:9px;width:fit-content}
+  .tabs button{border:0;background:transparent;color:var(--dim);font:inherit;font-size:12.5px;
+    padding:5px 12px;border-radius:7px;cursor:pointer;transition:.12s}
+  .tabs button:hover{color:var(--fg)}
+  .tabs button[aria-pressed=true]{background:var(--panel);color:var(--fg);font-weight:600;
+    box-shadow:0 1px 2px rgba(0,0,0,.07)}
+  .chartbox{position:relative}
+  .legend{display:flex;gap:6px 14px;flex-wrap:wrap;margin-top:12px;font-size:11.5px;
+    color:var(--dim);max-height:66px;overflow-y:auto;scrollbar-width:thin}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .sw{width:11px;height:2.5px;border-radius:2px}
+  .tip{position:absolute;pointer-events:none;background:var(--panel);border:1px solid var(--line);
+    border-radius:9px;box-shadow:var(--shadow);padding:9px 11px;font-size:12px;opacity:0;
+    transition:opacity .1s;min-width:132px;z-index:9}
+  .tip .tt{color:var(--faint);font-size:11px;margin-bottom:5px}
+  .tip .tr{display:flex;justify-content:space-between;gap:14px}
+
+  /* diagnosis */
+  .dg{display:flex;flex-direction:column;gap:10px;max-height:430px;overflow-y:auto;
+    scrollbar-width:thin;padding-right:4px}
+  .dgi{border-radius:10px;padding:10px 12px;border:1px solid var(--line)}
+  .dgi.bad{background:var(--badbg);border-color:color-mix(in srgb,var(--bad) 28%,transparent)}
+  .dgi.warn{background:var(--warnbg);border-color:color-mix(in srgb,var(--warn) 28%,transparent)}
+  .dgi.ok{background:var(--okbg);border-color:color-mix(in srgb,var(--ok) 26%,transparent)}
+  .dgi .h{display:flex;align-items:center;gap:7px;font-weight:620;font-size:12.5px}
+  .dgi ul{margin:6px 0 0;padding-left:16px;font-size:12.5px;color:var(--dim);line-height:1.6}
+  .badge{display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:620;
+    padding:2px 8px;border-radius:99px;letter-spacing:.02em}
+  .badge.ok{background:var(--okbg);color:var(--ok)}
+  .badge.warn{background:var(--warnbg);color:var(--warn)}
+  .badge.bad{background:var(--badbg);color:var(--bad)}
+
+  /* runs table */
+  table{border-collapse:separate;border-spacing:0;width:100%}
+  thead th{font-size:10.5px;font-weight:660;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--faint);text-align:right;padding:11px 14px;border-bottom:1px solid var(--line);
+    white-space:nowrap}
+  thead th:first-child{text-align:left}
+  tbody td{padding:11px 14px;border-bottom:1px solid var(--line2);text-align:right;
+    vertical-align:middle}
+  tbody tr:last-child td{border-bottom:0}
+  tbody tr{cursor:pointer;transition:background .1s}
+  tbody tr:hover{background:var(--line2)}
+  tbody tr.focus{background:color-mix(in srgb,var(--fg) 4%,transparent)}
+  tbody tr.off{opacity:.36}
+  td.name{text-align:left}
+  .rn{display:flex;align-items:center;gap:9px;font-weight:600}
+  .swatch{width:10px;height:10px;border-radius:3px;flex:0 0 10px}
+  .sub{color:var(--faint);font-size:11.5px;margin-left:19px}
+
+  details{margin-top:12px}
+  summary{cursor:pointer;list-style:none;font-size:11px;font-weight:660;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--faint);padding:8px 0;display:flex;align-items:center;gap:7px}
+  summary::-webkit-details-marker{display:none}
+  summary::before{content:'▸';transition:.15s;font-size:10px}
+  details[open] summary::before{transform:rotate(90deg)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(268px,1fr));gap:12px}
+  .mini{padding:12px 13px 8px}
+  .mini .h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+    font-size:12px;font-weight:600;margin-bottom:2px}
+  .empty{color:var(--faint);text-align:center;padding:56px 0;font-size:13px}
+  .ctl{display:flex;gap:18px;align-items:center;flex-wrap:wrap;color:var(--dim);font-size:12.5px}
+  .ctl label{display:inline-flex;align-items:center;gap:7px}
+  input[type=range]{width:96px;accent-color:var(--fg)}
+</style>
+
+<header>
+  <div class="brand"><span class="m"></span>Saryu runs</div>
+  <div class="stat" id="stat"></div>
+  <div class="grow"></div>
+  <div class="stat num" id="clock"></div>
+</header>
+
+<main>
+  <section><div class="kpis" id="kpis"></div></section>
+
+  <section class="split">
+    <div class="panel pad">
+      <div class="eyebrow">progress</div>
+      <div class="tabs" id="tabs"></div>
+      <div class="chartbox" id="chartbox">
+        <div id="hero"></div>
+        <div class="tip" id="tip"></div>
+      </div>
+      <div class="legend" id="legend"></div>
+    </div>
+    <div class="panel pad">
+      <div class="eyebrow">diagnosis</div>
+      <div class="dg" id="diag"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow" style="display:flex;align-items:center;gap:10px">runs
+      <span style="text-transform:none;letter-spacing:0;font-weight:400">— click to show/hide,
+      double-click to focus</span>
+      <span class="tabs" style="margin:0 0 0 auto"><button id="selAll">all</button
+        ><button id="selNone">none</button><button id="selRun">running</button></span></div>
+    <div class="panel" style="overflow:hidden"><table id="tbl"></table></div>
+  </section>
+
+  <section>
+    <div class="ctl" style="margin-bottom:12px">
+      <label>x
+        <span class="tabs" style="margin:0"><button id="bx-step" aria-pressed="true">step</button
+          ><button id="bx-time">time</button></span></label>
+      <label>y
+        <span class="tabs" style="margin:0"><button id="by-lin" aria-pressed="true">linear</button
+          ><button id="by-log">log</button></span></label>
+      <label>smoothing <input type="range" id="sm" min="0" max="9" value="0">
+        <span class="num" id="smv" style="width:22px">0</span></label>
+    </div>
+    <div id="sections"></div>
+  </section>
+</main>
+
+<script>
+const PALETTE=['#2563eb','#ea580c','#16a34a','#7c3aed','#db2777','#0891b2','#ca8a04','#dc2626','#4f46e5'];
+let RUNS={}, ON=new Set(), FOCUS=null, XMODE='step', YLOG=false, SM=0, HERO='eval/top1';
+let FIRST=true;                       // first poll picks the default selection; see refresh()
+
+// A killed run never writes its `done` line, so "no done" is not the same as "running" -- the
+// flip-flop sweeps stayed "running" for hours after being stopped and crowded out the default
+// selection. A run counts as live only if it has written a point recently.
+const STALE_S=600;
+function live(n){
+  const r=RUNS[n]; if(!r||r.done||!r.pts.length) return false;
+  const last=r.pts[r.pts.length-1];
+  const started=(r.meta&&r.meta.started)||0;
+  if(!started||last.t==null) return true;             // can't tell; assume live
+  return (started+last.t) > (Date.now()/1000 - STALE_S);
+}
+const $=id=>document.getElementById(id);
+
+const fmt=(v,p)=>v==null||!isFinite(v)?'—':
+  (Math.abs(v)>=1e5||(v!==0&&Math.abs(v)<1e-3))?v.toExponential(1)
+  :(+v).toFixed(p!=null?p:(Math.abs(v)>=100?1:Math.abs(v)>=10?2:3));
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const last=(r,k)=>{const p=r.pts.filter(x=>x.metrics[k]!=null&&isFinite(x.metrics[k]));
+  return p.length?p.at(-1).metrics[k]:null};
+const trend=(r,k,w=6)=>{const p=r.pts.filter(x=>x.metrics[k]!=null).slice(-w);
+  return p.length<3?null:p.at(-1).metrics[k]-p[0].metrics[k]};
+const keysOf=r=>[...new Set([].concat(...r.pts.map(p=>Object.keys(p.metrics))))];
+const visible=()=>[...ON].filter(n=>RUNS[n]&&RUNS[n].pts.length);
+
+async function load(){
+  let idx;
+  try{ idx=await (await fetch('runs.json?'+Date.now())).json(); }
+  catch(e){ $('stat').innerHTML='<span>server not reachable</span>'; return; }
+  for(const name of idx.runs){
+    let txt;
+    try{ txt=await (await fetch('runs/'+name+'.jsonl?'+Date.now())).text(); }catch(e){ continue; }
+    const pts=[]; let meta={},done=null;
+    for(const line of txt.split('\n')){
+      if(!line.trim())continue;
+      let r; try{ r=JSON.parse(line) }catch(e){ continue }   // half-written tail line
+      if(r.kind==='meta')meta=r; else if(r.kind==='point')pts.push(r); else if(r.kind==='done')done=r;
+    }
+    const prev=RUNS[name];
+    RUNS[name]={name,meta,pts,done,
+      color:prev?prev.color:PALETTE[Object.keys(RUNS).length%PALETTE.length]};
+    // A run that shows up mid-session and is still writing is the one just launched, so show it
+    // whatever else is on the chart.
+    if(!prev && !FIRST && !done) ON.add(name);
+  }
+  if(FIRST){
+    // The alphabetically-first six stop being the interesting ones as soon as the directory
+    // accumulates -- with 48 runs the newest were buried and the chart looked empty of anything
+    // current. Prefer runs that are still writing, then the most recently started.
+    const t0=n=>(RUNS[n].meta&&RUNS[n].meta.started)||0;
+    Object.keys(RUNS)
+      .sort((a,b)=>((live(a)?0:1)-(live(b)?0:1))||t0(b)-t0(a))
+      .slice(0,6).forEach(n=>ON.add(n));
+    FIRST=false;
+  }
+  draw();
+}
+
+function smooth(ys){ if(!SM)return ys; const a=1-Math.pow(.5,1/(SM*1.7+1)); let acc=null;
+  return ys.map(v=>v==null?null:(acc=acc==null?v:acc+a*(v-acc))) }
+
+function series(metric,runs){
+  const out=[];
+  for(const n of runs){ const r=RUNS[n]; if(!r)continue;
+    const xs=[],ys=[];
+    for(const p of r.pts){ const v=p.metrics[metric];
+      if(v==null||!isFinite(v))continue; xs.push(XMODE==='step'?p.step:p.t); ys.push(v) }
+    if(xs.length)out.push({name:n,color:r.color,xs,ys:smooth(ys)}) }
+  return out;
+}
+
+function ticks(a,b,n){
+  const span=b-a; if(!(span>0))return [a];
+  const raw=span/n, mag=Math.pow(10,Math.floor(Math.log10(raw))), norm=raw/mag;
+  const st=(norm<1.5?1:norm<3?2:norm<7?5:10)*mag;
+  const out=[]; for(let v=Math.ceil(a/st)*st; v<=b+1e-9; v+=st) out.push(+v.toFixed(10));
+  return out.length?out:[a,b];
+}
+
+/* Fixed viewBox with uniform scaling. The previous version used preserveAspectRatio="none",
+   which stretched every stroke and every text label non-uniformly. */
+function plot(metric,W,H,refs,big){
+  const S=series(metric,visible());
+  if(!S.length)return {svg:'<div class="empty">no data for this metric</div>',S:[],geom:null};
+  const L=big?52:42, R=big?16:12, T=big?14:10, B=big?30:22;
+  const xs=[].concat(...S.map(s=>s.xs)), ys=[].concat(...S.map(s=>s.ys));
+  let x0=Math.min(...xs), x1=Math.max(...xs), y0=Math.min(...ys), y1=Math.max(...ys);
+  for(const rf of refs||[]){ y0=Math.min(y0,rf.v); y1=Math.max(y1,rf.v) }
+  const lg=YLOG&&y0>0;
+  if(lg){ y0=Math.log10(y0); y1=Math.log10(y1) }
+  if(y1-y0<1e-12){ y1+=.5; y0-=.5 }
+  const pad=(y1-y0)*.12; y0-=pad; y1+=pad;
+  const X=v=>L+(x1===x0?.5:(v-x0)/(x1-x0))*(W-L-R);
+  const Y=v=>{const t=lg?Math.log10(v):v; return T+(1-(t-y0)/(y1-y0))*(H-T-B)};
+  const fs=big?11:9.5;
+  let g=`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block"
+          preserveAspectRatio="xMidYMid meet" font-family="ui-monospace,Menlo,Consolas,monospace">`;
+  for(const tv of ticks(lg?Math.pow(10,y0):y0, lg?Math.pow(10,y1):y1, big?5:3)){
+    if(lg&&tv<=0)continue; const yy=Y(tv); if(yy<T-1||yy>H-B+1)continue;
+    g+=`<line x1="${L}" y1="${yy.toFixed(1)}" x2="${W-R}" y2="${yy.toFixed(1)}"
+         stroke="var(--line)" stroke-width=".8"/>
+        <text x="${L-7}" y="${(yy+fs*.35).toFixed(1)}" text-anchor="end" fill="var(--faint)"
+         font-size="${fs}">${fmt(tv)}</text>`;
+  }
+  for(const tv of ticks(x0,x1,big?6:3)){
+    const xx=X(tv); if(xx<L-1||xx>W-R+1)continue;
+    g+=`<text x="${xx.toFixed(1)}" y="${H-B+fs+5}" text-anchor="middle" fill="var(--faint)"
+         font-size="${fs}">${tv>=1000?(tv/1000)+'k':fmt(tv,0)}</text>`;
+  }
+  g+=`<line x1="${L}" y1="${H-B}" x2="${W-R}" y2="${H-B}" stroke="var(--line)"/>`;
+  for(const rf of refs||[]){
+    const yy=Y(rf.v);
+    g+=`<line x1="${L}" y1="${yy.toFixed(1)}" x2="${W-R}" y2="${yy.toFixed(1)}"
+         stroke="${rf.c||'var(--faint)'}" stroke-width="1.3" stroke-dasharray="5 4" opacity=".85"/>
+        <text x="${W-R-4}" y="${(yy-6).toFixed(1)}" text-anchor="end" fill="${rf.c||'var(--faint)'}"
+         font-size="${fs}" font-weight="600">${esc(rf.l)}</text>`;
+  }
+  for(const s of S){
+    let d='';
+    for(let i=0;i<s.xs.length;i++) d+=(i?'L':'M')+X(s.xs[i]).toFixed(1)+' '+Y(s.ys[i]).toFixed(1);
+    g+=`<path d="${d}" fill="none" stroke="${s.color}" stroke-width="${big?2.2:1.7}"
+         stroke-linejoin="round" stroke-linecap="round"/>
+        <circle cx="${X(s.xs.at(-1)).toFixed(1)}" cy="${Y(s.ys.at(-1)).toFixed(1)}"
+         r="${big?3.4:2.6}" fill="${s.color}" stroke="var(--panel)" stroke-width="1.4"/>`;
+  }
+  g+='</svg>';
+  return {svg:g,S,geom:{W,H,L,R,T,B,x0,x1,X}};
+}
+
+/* ---------- diagnosis: the failure modes this project has actually hit ---------- */
+function diagnose(r){
+  const c=r.meta.config||{}, out=[], add=(lvl,msg)=>out.push({lvl,msg});
+  const loss=last(r,'loss'), t1=last(r,'eval/top1'), t5=last(r,'eval/top5');
+  const ins=last(r,'eval/in_set'), pairs=c.pairs, ch=c.chance_top1, chL=c.chance_loss;
+  if(loss!=null&&chL!=null&&loss>=chL-.02) add('bad','loss sits at chance — nothing is being learned');
+  else if(trend(r,'loss')>.02) add('warn','loss rising — diverging, or the learning rate is too high');
+  if(t1!=null&&ch!=null&&t1<=ch*1.5&&r.pts.length>4) add('bad','top1 at chance');
+  if(ins!=null&&pairs&&t1!=null&&ins>.8&&Math.abs(t1-1/pairs)<.06)
+    add('bad',`set membership, no binding — in_set ${ins.toFixed(2)} and top1 ≈ 1/${pairs}`);
+  else if(t1!=null&&t5!=null&&t5>.3&&t5>3.5*t1)
+    add('warn','top5 ≫ top1 — the value is stored but cannot be ranked first');
+  if(ins!=null&&pairs&&ins<Math.max(.3,1.6*pairs/64))
+    add('bad','the value set itself was never learned — past superposition capacity');
+  const B=last(r,'eval/binding_B');
+  if(B!=null){
+    if(Math.abs(B)<0.05) add('bad','binding B ≈ 0 — the readout ignores the query key entirely');
+    else if(B>0.3) add('ok',`binding forming — B ${B.toFixed(2)}`);
+    else add('warn',`binding B ${B.toFixed(2)} — weak key-dependence, not yet a vertex`);
+  }
+  const ps=keysOf(r).filter(k=>/(^|\/)p\d+$/.test(k)).sort();
+  if(ps.length>1){ const v=ps.map(k=>last(r,k));
+    if(v.every(x=>x!=null)){ const hi=Math.max(...v), lo=Math.min(...v), i=v.indexOf(hi);
+      if(hi>.05&&hi>3*Math.max(lo,1e-6))
+        add('warn',i===v.length-1?'only the newest pair is recalled — capacity ≈ 1'
+          :i===0?'the oldest pair is recalled best — positional shortcut, not content addressing'
+          :'recall is pinned to one slot'); } }
+  const ret=last(r,'diag/ret');
+  if(ret!=null&&c.gap!=null&&ret<c.gap)
+    add('bad',`retention ${ret.toFixed(0)} tokens < gap ${c.gap} — cannot span the distance`);
+  const l2=last(r,'diag/lvl2');
+  if(l2!=null&&l2<.005) add('bad','level-2 branch contributes ~0 — starved; this arm is the baseline');
+  const gn=last(r,'grad/norm');
+  if(gn!=null&&!isFinite(gn)) add('bad','gradient norm is not finite');
+  else if(gn!=null&&gn<1e-5) add('bad','gradients ≈ 0 — nothing is updating');
+  const dt=trend(r,'eval/top1',6);
+  if(!r.done&&dt!=null&&Math.abs(dt)<.005&&ch!=null&&t1>ch*1.5)
+    add('warn','top1 flat for 6 evaluations — plateaued');
+  const p=r.pts.at(-1);
+  if(r.done&&p&&c.steps&&p.step<c.steps*0.98)
+    add('warn',`run ended at step ${p.step} of ${c.steps} — stopped early, or this file is `
+      +`left over from a shorter run of the same name`);
+  if(!out.length) add('ok','no issues detected');
+  return out;
+}
+const worst=d=>d.some(x=>x.lvl==='bad')?'bad':d.some(x=>x.lvl==='warn')?'warn':'ok';
+const LBL={ok:'healthy',warn:'needs a look',bad:'going wrong'};
+
+function refsFor(metric){
+  const cfg=visible().map(n=>RUNS[n].meta.config||{}), out=[];
+  if(metric==='eval/top1'){
+    const ch=cfg.find(c=>c.chance_top1)?.chance_top1; if(ch) out.push({v:ch,l:'chance'});
+    const ps=[...new Set(cfg.map(c=>c.pairs).filter(Boolean))];
+    if(ps.length===1) out.push({v:1/ps[0],l:`1/${ps[0]} · set, no binding`,c:'var(--bad)'});
+  } else if(metric==='loss'){
+    const cl=cfg.find(c=>c.chance_loss)?.chance_loss; if(cl) out.push({v:cl,l:'chance'});
+  } else if(metric==='eval/binding_B'){
+    out.push({v:0,l:'0 · rank one, no key-dependence',c:'var(--bad)'});
+  } else if(metric==='eval/in_set'){
+    const ps=[...new Set(cfg.map(c=>c.pairs).filter(Boolean))];
+    if(ps.length===1) out.push({v:ps[0]/64,l:'chance',c:'var(--faint)'});
+  }
+  return out;
+}
+
+function draw(){
+  const names=Object.keys(RUNS).sort();
+  const vis=visible();
+  if(FOCUS&&!RUNS[FOCUS])FOCUS=null;
+  const hero=FOCUS&&ON.has(FOCUS)?RUNS[FOCUS]:(vis.length?RUNS[vis[0]]:null);
+
+  /* KPIs */
+  if(hero){
+    const d=diagnose(hero), w=worst(d), c=hero.meta.config||{}, p=hero.pts.at(-1);
+    const card=(l,v,s,cls)=>`<div class="panel kpi ${cls||''}"><div class="l">${l}</div>
+      <div class="v num">${v}</div><div class="s">${s||'&nbsp;'}</div></div>`;
+    const t1=last(hero,'eval/top1'), ins=last(hero,'eval/in_set');
+    $('kpis').innerHTML=
+      card('top1',fmt(t1),c.chance_top1?`chance ${fmt(c.chance_top1)}`+
+           (c.pairs?` · 1/${c.pairs} = ${fmt(1/c.pairs)}`:''):'')
+    + card('in_set',fmt(ins),c.pairs?`chance ${fmt(c.pairs/64)}`:'')
+    + card('loss',fmt(last(hero,'loss')),c.chance_loss?`chance ${c.chance_loss}`:'')
+    + card('step',p?p.step.toLocaleString():'—',hero.done?`done in ${hero.done.elapsed}s`
+           :p?`${Math.round(p.t)}s elapsed`:'starting')
+    + `<div class="panel kpi verdict"><div class="l">${esc(hero.name)}</div>
+        <div class="v" style="color:var(--${w})">${LBL[w]}</div>
+        <div class="s">${d.length} check${d.length===1?'':'s'}</div></div>`;
+  } else $('kpis').innerHTML='<div class="panel kpi"><div class="s">no run selected</div></div>';
+
+  /* hero chart */
+  const all=new Set(); vis.forEach(n=>keysOf(RUNS[n]).forEach(k=>all.add(k)));
+  const pref=['eval/binding_B','eval/top1','eval/in_set','eval/top5','loss','grad/norm']
+    .filter(k=>all.has(k));
+  const rest=[...all].filter(k=>!pref.includes(k)).sort();
+  if(!all.has(HERO))HERO=pref[0]||rest[0];
+  $('tabs').innerHTML=pref.concat(rest.slice(0,3)).map(k=>
+    `<button data-k="${esc(k)}" aria-pressed="${k===HERO}">${esc(k)}</button>`).join('');
+  $('tabs').querySelectorAll('button').forEach(b=>b.onclick=()=>{HERO=b.dataset.k;draw()});
+  const H=plot(HERO,840,300,refsFor(HERO),true);
+  $('hero').innerHTML=H.svg;
+  window.__geom=H.geom; window.__S=H.S;
+  $('legend').innerHTML=H.S.map(s=>`<span><i class="sw" style="background:${s.color}"></i>
+    ${esc(s.name)} <b class="num" style="color:var(--fg)">${fmt(s.ys.at(-1))}</b></span>`).join('');
+
+  /* diagnosis */
+  $('diag').innerHTML=vis.map(n=>{
+    const d=diagnose(RUNS[n]), w=worst(d);
+    return `<div class="dgi ${w}"><div class="h">
+      <i class="swatch" style="background:${RUNS[n].color}"></i>${esc(n)}
+      <span class="badge ${w}" style="margin-left:auto">${LBL[w]}</span></div>
+      <ul>${d.map(x=>`<li>${x.msg}</li>`).join('')}</ul></div>`;
+  }).join('')||'<div class="empty">select a run</div>';
+
+  /* runs table */
+  const cols=['run','step','loss','top1','top5','in_set','state'];
+  let t='<thead><tr>'+cols.map(c=>`<th>${c}</th>`).join('')+'</tr></thead><tbody>';
+  for(const n of names){
+    const r=RUNS[n], p=r.pts.at(-1), c=r.meta.config||{}, d=diagnose(r), w=worst(d);
+    const sub=[c.arm&&c.arm!==n?c.arm:null,c.pairs?c.pairs+' pairs':null,
+      c.gap!=null?'gap '+c.gap:null,c.params?(c.params/1000).toFixed(0)+'k':null]
+      .filter(Boolean).join(' · ');
+    t+=`<tr class="${ON.has(n)?'':'off'} ${FOCUS===n?'focus':''}" data-n="${esc(n)}">
+      <td class="name"><div class="rn"><i class="swatch" style="background:${r.color}"></i>
+        ${esc(n)}</div>${sub?`<div class="sub">${esc(sub)}</div>`:''}</td>
+      <td class="num">${p?p.step.toLocaleString():'—'}${
+          c.steps?`<span style="color:var(--faint)">/${(c.steps/1000>=1?
+            (c.steps/1000)+'k':c.steps)}</span>`:''}
+        <div class="sub" style="margin:0;text-align:right">${
+          r.done?(p&&c.steps&&p.step<c.steps*0.98
+            ?`<span style="color:var(--warn)">stopped at ${Math.round(100*p.step/c.steps)}%</span>`
+            :'done')
+          :p?Math.round(p.t)+'s':'…'}</div></td>
+      <td class="num">${fmt(last(r,'loss'))}</td>
+      <td class="num" style="font-size:15px;font-weight:620">${fmt(last(r,'eval/top1'))}</td>
+      <td class="num">${fmt(last(r,'eval/top5'))}</td>
+      <td class="num">${fmt(last(r,'eval/in_set'))}</td>
+      <td><span class="badge ${w}">${LBL[w]}</span></td></tr>`;
+  }
+  $('tbl').innerHTML=t+'</tbody>';
+  $('tbl').querySelectorAll('tbody tr').forEach(el=>{
+    el.onclick=()=>{const n=el.dataset.n; ON.has(n)?ON.delete(n):ON.add(n); draw()};
+    el.ondblclick=e=>{e.preventDefault(); FOCUS=FOCUS===el.dataset.n?null:el.dataset.n;
+      ON.add(el.dataset.n); draw()};
+  });
+
+  /* detail sections */
+  const groups={};
+  for(const k of all){ const g=k.includes('/')?k.split('/')[0]:'other'; (groups[g]=groups[g]||[]).push(k) }
+  const ord=['eval','other','diag','grad','labels'];
+  $('sections').innerHTML=Object.keys(groups)
+    .sort((a,b)=>(ord.indexOf(a)+9)%9-(ord.indexOf(b)+9)%9)
+    .map(g=>{
+      const cards=groups[g].sort().map(k=>{
+        const P=plot(k,300,120,refsFor(k),false); if(!P.S.length)return '';
+        const vals=P.S.map(s=>`<span class="num" style="color:${s.color}">${fmt(s.ys.at(-1))}</span>`)
+          .join(' ');
+        return `<div class="panel mini"><div class="h"><span>${esc(k)}</span>
+          <span>${vals}</span></div>${P.svg}</div>`;
+      }).filter(Boolean).join('');
+      return cards?`<details open><summary>${esc(g)} · ${groups[g].length}</summary>
+        <div class="grid">${cards}</div></details>`:'';
+    }).join('')||'<div class="empty">no metrics yet</div>';
+
+  const act=names.filter(n=>!RUNS[n].done).length;
+  $('stat').innerHTML=(act?`<span class="live"></span><span>${act} running</span>`:'')+
+    `<span>${names.length-act} done</span><span>${vis.length} shown</span>`;
+  $('clock').textContent=new Date().toLocaleTimeString();
+}
+
+/* hover crosshair on the hero chart */
+$('chartbox').addEventListener('mousemove',e=>{
+  const g=window.__geom, S=window.__S, tip=$('tip'), svg=$('hero').querySelector('svg');
+  if(!g||!S||!S.length||!svg){tip.style.opacity=0;return}
+  const r=svg.getBoundingClientRect();
+  const sx=(e.clientX-r.left)/r.width*g.W;
+  if(sx<g.L||sx>g.W-g.R){tip.style.opacity=0;return}
+  const xv=g.x0+(sx-g.L)/(g.W-g.L-g.R)*(g.x1-g.x0);
+  let rows='',best=null;
+  for(const s of S){
+    let bi=0,bd=Infinity;
+    for(let i=0;i<s.xs.length;i++){const d=Math.abs(s.xs[i]-xv); if(d<bd){bd=d;bi=i}}
+    if(best===null||bd<best)best=s.xs[bi];
+    rows+=`<div class="tr"><span style="color:${s.color}">${esc(s.name)}</span>
+      <b class="num">${fmt(s.ys[bi])}</b></div>`;
+  }
+  tip.innerHTML=`<div class="tt">${XMODE} ${fmt(best,0)}</div>${rows}`;
+  tip.style.opacity=1;
+  const bx=$('chartbox').getBoundingClientRect();
+  let lx=e.clientX-bx.left+14;
+  if(lx+tip.offsetWidth>bx.width) lx=e.clientX-bx.left-tip.offsetWidth-14;
+  tip.style.left=lx+'px';
+  tip.style.top=Math.max(0,e.clientY-bx.top-tip.offsetHeight-10)+'px';
+});
+$('chartbox').addEventListener('mouseleave',()=>{$('tip').style.opacity=0});
+
+const seg=(a,b,f)=>{const A=$(a),B=$(b);
+  A.onclick=()=>{A.setAttribute('aria-pressed','true');B.setAttribute('aria-pressed','false');f(0)};
+  B.onclick=()=>{B.setAttribute('aria-pressed','true');A.setAttribute('aria-pressed','false');f(1)}};
+$('selAll').onclick=()=>{Object.keys(RUNS).forEach(n=>ON.add(n));draw()};
+$('selNone').onclick=()=>{ON.clear();draw()};
+$('selRun').onclick=()=>{ON.clear();Object.keys(RUNS).filter(n=>!RUNS[n].done).forEach(n=>ON.add(n));
+  draw()};
+seg('bx-step','bx-time',i=>{XMODE=i?'time':'step';draw()});
+seg('by-lin','by-log',i=>{YLOG=!!i;draw()});
+$('sm').oninput=e=>{SM=+e.target.value;$('smv').textContent=SM;draw()};
+
+load(); setInterval(load,3000);
+</script>

@@ -1,0 +1,92 @@
+DOES CARVING A MEMORY SUBSPACE GIVE THE MODEL A MEMORY?
+MQAR 4 pairs, d=128, 2 layers, d_h=16, carve=8 (8 track / 8 memory), lr=0.0003, 1500 steps, seeds [0]
+chance = 1/64 = 0.016
+
+arm              gap 4    gap 16    gap 64
+------------------------------------------
+      base gap4 500/1500 loss 4.113 45s, 89s left
+      base gap4 1000/1500 loss 3.822 93s, 47s left
+      base gap4 1500/1500 loss 3.744 138s, 0s left
+      base gap16 500/1500 loss 4.184 65s, 130s left
+      base gap16 1000/1500 loss 4.192 131s, 66s left
+      base gap16 1500/1500 loss 4.160 197s, 0s left
+      base gap64 500/1500 loss 4.176 148s, 295s left
+      base gap64 1000/1500 loss 4.140 296s, 148s left
+      base gap64 1500/1500 loss 4.155 446s, 0s left
+base             0.113     0.020     0.012
+      carve gap4 500/1500 loss 3.830 52s, 103s left
+      carve gap4 1000/1500 loss 3.591 97s, 48s left
+      carve gap4 1500/1500 loss 3.525 147s, 0s left
+      carve gap16 500/1500 loss 4.213 70s, 140s left
+      carve gap16 1000/1500 loss 3.898 141s, 71s left
+      carve gap16 1500/1500 loss 3.677 212s, 0s left
+      carve gap64 500/1500 loss 4.176 153s, 306s left
+      carve gap64 1000/1500 loss 4.139 308s, 154s left
+      carve gap64 1500/1500 loss 4.159 465s, 0s left
+carve            0.117     0.098     0.020
+      carve+bind gap4 500/1500 loss 3.994 52s, 104s left
+      carve+bind gap4 1000/1500 loss 3.399 102s, 51s left
+      carve+bind gap4 1500/1500 loss 3.294 152s, 0s left
+      carve+bind gap16 500/1500 loss 4.149 74s, 148s left
+      carve+bind gap16 1000/1500 loss 3.894 139s, 69s left
+      carve+bind gap16 1500/1500 loss 3.890 211s, 0s left
+      carve+bind gap64 500/1500 loss 4.181 162s, 324s left
+      carve+bind gap64 1000/1500 loss 4.141 323s, 161s left
+      carve+bind gap64 1500/1500 loss 4.168 467s, 0s left
+carve+bind       0.184     0.066     0.020
+
+REGISTERED PREDICTIONS
+  P1 carve+bind beats base at gap 4 by >= 0.09: 0.113 -> 0.184 (+0.070) -> FAILS
+  P2 carve+bind at gap 64 stays above 0.10: 0.020 -> FAILS
+  P3 carve alone helps less than carve+bind at gap 4: 0.117 vs 0.184 -> HOLDS
+
+=============================================================================
+WHAT IS MISSING -- diagnosed, not guessed
+
+RESULT: carve+bind 0.184 / 0.066 / 0.020 against base 0.113 / 0.020 / 0.012. P1 missed
+(+0.070, needed +0.09), P2 failed outright, P3 held. Carving moved gap 16 by 5x
+(0.020 -> 0.098) and binding moved gap 4 by 63% (0.113 -> 0.184). Real, but nowhere near
+the 0.97 the same mechanism reaches by construction. Three deficits explain the distance,
+and two of them are mine.
+
+1. THE BINDER IS k=1 IN AN 8-DIMENSIONAL SUBSPACE, SO THE CEILING IS 0.430.
+   By construction, carved, 4 pairs, memory dimension 8 (evidence/memory_mechanisms.py,
+   D=16 so the memory half is 8):
+
+       k        1        2        4        8
+       gap 0    0.430    0.590    0.687    0.737
+       gap 16   0.417    0.537    0.683    0.717
+
+   The trained arm reached 0.184 against a CEILING of 0.430. The architecture as built
+   caps itself before training starts, because carve=8 leaves exactly one reflection for
+   binding, and the trace law says one reflection in d=8 has overlap (1-2/8)^1 = 0.75 --
+   almost no hiding at all. This is the same mistake the paper made at the layer level,
+   repeated inside the memory subspace.
+
+2. TRAINING REACHES 43% OF ITS OWN CEILING (0.184 of 0.430).
+   A separate, genuine learnability gap: the model must learn to emit the SAME memory
+   direction for a key at write time and at query time, from two different contexts. That
+   is the content-addressing that attention gets for free from an explicit query-key dot
+   product, and it has to be discovered here.
+
+3. GAP 64 IS UNFIXED (0.020) BECAUSE CARVING PROTECTS AGAINST THE TRANSPORT BUT NOT
+   AGAINST THE GATE. The write is h_M <- (1-g) h_M + g c with ONE SCALAR GATE PER HEAD, so
+   the memory dimensions decay on the tracking head's timescale, retention ~25 tokens at
+   g ~ 0.04. That is exactly the observed signature: gap 16 (< 25) partly survives, gap 64
+   (>> 25) is washed out. Splitting inside a head forced tracking and memory to share the
+   one resource they must not share.
+
+THE FIX FOLLOWS FROM 1 AND 3, AND IT IS ALREADY SUPPORTED BY THE ARCHITECTURE.
+Dedicate whole HEADS to memory instead of splitting dimensions inside a head:
+
+   transport   identity, so nothing ever scrambles the memory head
+   binding     ALL n_h reflections go to binding, in the full d_h = 16, not 1 in 8.
+               At k=8, (1-2/16)^8 = 0.344 overlap; by construction that is 0.737, which is
+               4x the ceiling of what was just tested.
+   gate        its own, because gates are ALREADY per head -- long retention on the memory
+               head, fast on the tracking heads, and NO kernel change is needed.
+
+The per-head gate is the part that matters: a per-dimension gate would break the exact
+kernel, which is why the state was never split this way before. Splitting by head avoids
+that entirely, and the timescale ladder (gate_timescales) already exists to initialise a
+long-retention head.
