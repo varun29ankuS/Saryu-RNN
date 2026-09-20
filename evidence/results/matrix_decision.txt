@@ -56,8 +56,11 @@ mathematics and have NO demonstrated predictive value for what gradient descent 
 sanity checks, never evidence for a direction.
 
 WHAT IS KEPT
-The Householder-product transition, which is genuinely ours and is DeltaProduct's contribution, now
-applied to a matrix state. The chunk-parallel kernel. The state-tracking results, which were never
+The Householder-product transition, now applied to a matrix state. To be exact about whose it is:
+the product transition is DeltaProduct's contribution, not ours, and the sentence that stood here
+claimed both at once. What this project added around it is the beta = 1 - cos(theta) parameterisation,
+the scalar-gate convex form that makes the exact chunk kernel possible, and the group-theoretic
+failure analysis -- not the product itself. The chunk-parallel kernel. The state-tracking results, which were never
 in question. And the instrumentation -- failure decomposition, the three-way read probe, exact
 contribution isolation -- which no paper in the test-time-recurrence literature currently has.
 

@@ -120,8 +120,12 @@ by 1 − β = cos θ. This form keeps β in [0, 2] for every input, reaches the 
 sit. β stays learnable because a fixed reflection can never forget along a direction and fixes the
 sign of the determinant for every token ([`evidence/parity.py`](evidence/parity.py)). In a toy
 sweep the sigmoid solved 0 of 16 state-tracking runs and the cosine form 9 of 16
-([`evidence/beta_activation.py`](evidence/beta_activation.py)). The trained 25M model uses the
-whole range: near-exact reflections in its first layer, soft contractions in its last.
+([`evidence/beta_activation.py`](evidence/beta_activation.py)). The trained 25M model does *not*
+use the whole range, which an earlier version of this section claimed: β sits at a pure reflection
+in every layer (medians 2.000, 1.998, 1.998, 1.988, nothing anywhere near the singular β = 1), and
+the learned input dependence varies β close to 2 rather than across the range. What does change with
+depth is the gate — retention `1/g` runs 11–17 tokens in the first two layers and reaches 86 and 132
+in layer 2 ([`results/trained_geometry.txt`](evidence/results/trained_geometry.txt)).
 
 **A convex, scalar gate.** Each transform has spectral norm at most one and the write is a convex
 mix, so the state is bounded by its inputs for every sequence (a one-line proof in the paper). The
@@ -179,10 +183,14 @@ Every model was trained at context 128. Lower is better.
 | Saryu 5M (released checkpoint, value embedding) | 5.0M | 5,000 | 1.671 | 1.586 | 1.586 | 1.586 |
 
 Reading it honestly:
-- **The model reads about 512 characters and no more.** Past that the recurrent state entering the
+- **The model reads about 256 characters and no more.** Past that the recurrent state entering the
   scored text is identical to six decimals in every layer and the predictions do not change
-  ([`evidence/results/effective_context.txt`](evidence/results/effective_context.txt)). Context 128
-  is worse only because the scored characters then have nothing in front of them.
+  ([`evidence/results/effective_context.txt`](evidence/results/effective_context.txt)). Measuring it
+  directly — loss at the final position with only the last `k` characters visible, 512 samples per
+  `k` — saturation is at 256, not the 512 stated here earlier: `k` = 256 costs +0.0006 bits against
+  full context, and 256 → 512 is worth nothing
+  ([`results/trained_geometry.txt`](evidence/results/trained_geometry.txt)). Context 128 is worse
+  only because the scored characters then have nothing in front of them.
 - An earlier version of this table claimed the model kept improving out to context 8192. That was
   an artefact of drawing window positions separately per length, so each column scored different
   text. These numbers score identical text at every length; they are better than the old ones
@@ -256,7 +264,7 @@ corpus/                 enwik8                            (not in git)
   already buys 1.1–5.4×, which drops the recurrence to 17–53% of a step, and a hand-written kernel
   would be competing for the remainder without a fused backward
   ([`results/kernel_profile.txt`](evidence/results/kernel_profile.txt)).
-- **Known limits:** the trained models stop using context at about 512 characters; two of the four
+- **Known limits:** the trained models stop using context at about 256 characters; two of the four
   rows of Paper B's character table have no qualifying run behind them; A₅'s rung coincides with
   chance, so those runs confirm the lattice law without demonstrating it.
 
