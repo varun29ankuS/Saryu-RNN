@@ -1,3 +1,31 @@
+RETRACTED 2026-09-20 -- THE NUMBERS BELOW ARE NOT SUPPORTED BY ANY RUN LOG
+================================================================================================
+Checked against runs/ on 2026-09-20. The nine logged runs of this experiment are:
+
+    cell-delta-p4-s0/1/2   matrix, contraction read   0.133  0.148  0.164
+    cell-hrr-p4-s0/1/2     wide vector, unbinding     0.039  0.039  0.031
+    cell-saryu-p4-s0/1/2   the shipped recurrence     0.328  0.336  0.289
+
+started 16:38-17:12 on 2026-09-19, and 17:12 was the last run of that evening. Re-running the
+cell today reproduces the logged values (0.148 matrix, 0.031 vector), so the script is not at
+fault.
+
+WHAT IS WITHDRAWN. The matrix figure of 0.984 and the vector figure of 0.836; the crossover
+table at 4 and 8 pairs (no run in the whole history pairs a matrix or vector cell with 8 pairs);
+the head-structure table at H = 1/4/16; the hybrid arms at 0.938 and 0.766. None of these have a
+run behind them. With the matrix cell measured at 0.164 it does not solve the task either, so
+"the read is the wall" is NOT demonstrated and the decision to adopt the matrix is reopened.
+
+WHAT STANDS, verified in the logs. A 290,370-parameter transformer solves 4-pair MQAR at 1.000
+on three seeds (base-transformer-p4-s0/1/2), and the shipped recurrence sits at ~0.32. So the
+task IS solvable at this budget and this architecture does not solve it. That conclusion is
+unaffected.
+
+The case for a matrix state now rests on the published literature (DeltaNet, DeltaProduct, Gated
+DeltaNet) and on the common-factor derivation, which is mathematics -- not on anything measured
+in this file.
+================================================================================================
+
 DECISION: MATRIX STATE WITH A CONTRACTING READ
 ==============================================
 

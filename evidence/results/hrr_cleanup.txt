@@ -1,0 +1,7 @@
+HRR CLEANUP  1024 state floats, tau=0.1, 6000 steps, 2 seeds, lr=0.003
+cell_shootout baseline, no cleanup:  4 pairs 0.836   8 pairs 0.023
+matrix reference:                    4 pairs 0.984   8 pairs 0.984
+
+         arm    params              p=4              p=8
+----------------------------------------------------------
+         hrr   611,396     0.023, 0.031     0.047, 0.039

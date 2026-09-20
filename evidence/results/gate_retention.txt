@@ -1,0 +1,15 @@
+GATE RETENTION  1 pair, d=128 H=8 dh=16 nh=2, 2 seeds, chance 0.016
+question: is the gap-64 wall the gate failing to hold, rather than a capacity limit?
+nh_sweep_shortgap measured 1 pair at gap 0 -> 1.000 and at gap 64 -> 0.012
+
+A gap0  L2 1500   recall 1.000 (1.000, 1.000)   max 1/g per layer  L0:9  L1:19   overall 19 tok
+B gap64 L2 1500   recall 0.027 (0.023, 0.031)   max 1/g per layer  L0:8  L1:3   overall 8 tok
+C gap64 L2 6000   recall 0.039 (0.031, 0.047)   max 1/g per layer  L0:4  L1:4   overall 4 tok
+D gap64 L4 1500   recall 0.516 (1.000, 0.031)   max 1/g per layer  L0:9  L1:6  L2:336  L3:4   overall 336 tok
+
+6079s
+
+READ, against the registered predictions
+  P1 arm B retention 8 tokens against a 64-token gap: HOLDS -- overwritten before the query
+  C gap64 L2 6000: retention 4 tok (flat), recall 0.039 (flat)
+  D gap64 L4 1500: retention 336 tok (grew), recall 0.516 (rose)   -> P3: the wall is a training/scale failure

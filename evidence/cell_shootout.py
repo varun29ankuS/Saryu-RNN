@@ -1,5 +1,13 @@
 """Matrix-with-contraction vs wide-vector-with-unbinding, at EQUAL state budget, trained.
 
+    THE CONCLUSIONS DRAWN FROM THIS SCRIPT ARE RETRACTED. See the banner on
+    results/matrix_decision.txt. Its nine logged runs scored delta 0.133/0.148/0.164 and
+    hrr 0.039/0.039/0.031; the figures of 0.984 and 0.836 that were reported have no run
+    behind them. Both cells here were also missing components their own references require --
+    see ShortConv and unitary() below, and evidence/delta_reference.py for a matrix cell that
+    actually reaches published behaviour (1.000, logged in runs/dref-*).
+
+
 WHAT THE BASELINE ESTABLISHED. A 290k-parameter transformer solves 4-pair MQAR at 1.000 where our
 387k-parameter recurrence has never exceeded 0.39 in 170 runs. So the task is solvable at this
 budget and the wall is architectural. The derivation says why: our query's transport is a COMMON
@@ -67,6 +75,29 @@ SEP = NENT
 torch.set_num_threads(int(os.environ.get('THREADS', 4)))
 
 
+class ShortConv(nn.Module):
+    """Depthwise causal convolution, kernel 4, over the sequence.
+
+    THE COMPONENT THIS FILE WAS MISSING, and it is the one its own result file calls decisive.
+    matrix_decision.txt: "The first DeltaNet here scored 0.13 because it had no short causal
+    convolution -- the component arXiv 2609.16183 names as dominant... With it: 0.094 -> 0.961 at
+    the same learning rate." That fix was never committed here, so the published script scored 0.07
+    where the published result says 0.984.
+
+    Why it is load-bearing for MQAR specifically: the cells derive k, v and q from the SAME token,
+    but the task binds key token i to value token i+1. Without a conv mixing adjacent positions
+    there is no path by which a key can ever meet its value, which is why the vector cell sat at
+    exactly uniform loss, ln(64) = 4.159, at every learning rate."""
+
+    def __init__(self, d, k=4):
+        super().__init__()
+        self.conv = nn.Conv1d(d, d, k, groups=d, padding=k - 1)
+        self.k = k
+
+    def forward(self, x):                                   # [B, L, D]
+        return self.conv(x.transpose(1, 2))[..., :x.shape[1]].transpose(1, 2)
+
+
 class DeltaCell(nn.Module):
     """S <- S(I - b k k^T) + b v k^T ;  o = S q.   State is dk*dv floats.
 
@@ -76,6 +107,7 @@ class DeltaCell(nn.Module):
     def __init__(self, d, dk, dv):
         super().__init__()
         self.ln = nn.LayerNorm(d)
+        self.sc = ShortConv(d)                                   # see ShortConv: was missing
         self.k = nn.Linear(d, dk)
         self.v = nn.Linear(d, dv)
         self.q = nn.Linear(d, dk)
@@ -84,7 +116,7 @@ class DeltaCell(nn.Module):
         self.dk, self.dv = dk, dv
 
     def forward(self, x):
-        z = self.ln(x)
+        z = self.sc(self.ln(x))
         B, L, _ = z.shape
         S = torch.zeros(B, self.dv, self.dk, device=z.device, dtype=z.dtype)
         outs = []
@@ -102,9 +134,20 @@ class DeltaCell(nn.Module):
 
 
 def unitary(x):
-    """Unit magnitude at every frequency, so the convolution inverse is exact."""
+    """Unit magnitude at every frequency, so the convolution inverse is exact.
+
+    STRAIGHT-THROUGH, and this is load-bearing. Plain X/|X| annihilates the gradient with respect
+    to the magnitude: the forward value is scale-invariant, so nothing upstream ever learns how big
+    to make the key. The first version of this cell sat at chance loss for 5000 steps for exactly
+    that reason. The straight-through estimator keeps the unit-magnitude forward value and passes
+    the gradient through as if this were the identity, which is what took the cell to 0.836.
+
+    This fix was applied when the result in matrix_decision.txt was measured, and was NOT committed
+    into this file -- so the published script scored 0.023 where the published result says 0.836.
+    Found on 2026-09-20 by rerunning it as the baseline of evidence/hrr_cleanup.py."""
     X = torch.fft.rfft(x, dim=-1)
-    return torch.fft.irfft(X / (X.abs() + 1e-6), n=x.shape[-1], dim=-1)
+    Xn = X / (X.abs() + 1e-6)
+    return torch.fft.irfft(X + (Xn - X).detach(), n=x.shape[-1], dim=-1)
 
 
 class HRRCell(nn.Module):
@@ -113,6 +156,7 @@ class HRRCell(nn.Module):
     def __init__(self, d, dm):
         super().__init__()
         self.ln = nn.LayerNorm(d)
+        self.sc = ShortConv(d)                                   # see ShortConv: was missing
         self.k = nn.Linear(d, dm)
         self.v = nn.Linear(d, dm)
         self.q = nn.Linear(d, dm)
@@ -122,7 +166,7 @@ class HRRCell(nn.Module):
         self.dm = dm
 
     def forward(self, x):
-        z = self.ln(x)
+        z = self.sc(self.ln(x))
         B, L, _ = z.shape
         k = unitary(self.k(z))
         q = unitary(self.q(z))

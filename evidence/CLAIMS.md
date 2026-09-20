@@ -37,16 +37,39 @@ was back to optimisation. A full circle, with confident write-ups at each statio
 | 17 | Effective context ≈ 8 characters | **caught before reporting** — noise on 16 samples; real value ~256 | own re-run |
 | 18 | It is expressivity; nh=2 is the ceiling | **retracted** — trained accuracy is flat at ~0.32 while the construction ceiling moves 0.347 → 0.973 | pre-registered falsifier |
 | 19 | Nine mechanisms are "available but unused" | **unstable** — rested on constructions free to use more reflections than the model has; partially restored by #18's retraction | — |
-| 20 | Wide vector beats matrix at equal budget | stands (construction only) | — |
+| 20 | Wide vector beats matrix at equal budget | **open again.** Briefly marked retracted on the strength of the crossover table in #25, which has no run behind it. The construction still stands as a construction; no trained comparison exists, because the vector arm has never been run with the components its own literature requires | — |
 | 21 | Deposit vs disposition is categorical under overwrite | stands (construction only) | — |
 | 22 | Commutative binding cannot chain; direction fixes it | stands (construction only) | — |
+| 23 | Superlinear memory capacity under sparsity requires orthogonality, which we uniquely have | **corrected same session** — read from the abstract; the full paper attributes it to prior work and Charles/Yap/Rozell 2014 get it for randomly connected networks too. Orthogonality is sufficient and best-studied, not necessary. The structural match survives in sharper form | reading the primary source |
+| 24 | The recurrence is angle-multiplexed storage; the trace is its Bragg selectivity | **retracted before writeup** — predicts recall rises with gap; measured recall falls monotonically (4 pairs: 0.199 → 0.113 → 0.012 at gaps 0/4/64), and a single pair dies at gap 64 where the framing has no work to do | own prior table, checked before claiming |
+| 25 | Matrix 0.984 / vector 0.836; the crossover; head structure; the hybrids | **RETRACTED — no run behind any of them.** The nine logged runs of that experiment are delta 0.133/0.148/0.164, hrr 0.039/0.039/0.031, saryu 0.328/0.336/0.289. No 4-pair run in the whole history exceeds 0.80 except the transformer, and no run ever paired a matrix or vector cell with 8 pairs. Written into a results file, a decision, a README, a website and a public commit | checking a results file against runs/ |
+| 26 | Our DeltaCell is a fair test of a matrix state | **retracted** — it lacked per-projection short convs, silu on q/k/v, beta in (0,2), per-head RMSNorm before the output projection, and multi-head structure. A faithful implementation scores 1.000 where it scored 0.164 | line-by-line diff against the reference implementation |
 
 ## Tally
 
-- Substantive claims: **22**
-- Retracted, reversed, or materially corrected: **13**
-- Still standing and *trained*: **1** (#2)
+- Substantive claims: **26**
+- Retracted, reversed, or materially corrected: **18**
+
+- Still standing and *trained*: **2** (#2, and the parity result in `runs/dref-*`: a faithful
+  DeltaNet solves 4-pair MQAR at 1.000 where this recurrence sits at 0.32)
 - Still standing but **construction-only, never trained**: 3 (#20, #21, #22)
+
+### #25 is different in kind from every other entry
+
+The rest of this ledger is wrong *inferences* from real measurements. #25 is a set of numbers that
+no measurement produced, written into a results file and from there into an architecture decision,
+a README, a website and a public commit. It should not be averaged in with the others and it should
+not be read as evidence that the process is working — nothing in the process caught it for a day.
+
+What caught it was mechanical and cost one query: compare every number in a results file against
+`runs/`. That is now the rule. **Every figure quoted in a results file must name the run that
+produced it, and any figure that cannot is not a result.**
+
+#24 is the first claim retired *before* it was written into anything. It took one table that was
+already in the repository, and the framing had already survived a literature check — a real
+literature, real capacity formulas, and a quantity we had already measured. Plausibility and a
+citation were not the constraint; the constraint was our own data, and checking it cost one file
+read. That is the cheapest catch in this ledger and the only one that cost nothing to act on.
 
 ## What caught them
 

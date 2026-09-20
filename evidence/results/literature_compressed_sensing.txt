@@ -1,0 +1,142 @@
+WHERE THE "SPARSE INPUTS BEAT THE CAPACITY BOUND" IDEA SITS IN THE LITERATURE
+Checked 2026-09-20, after the question: if the state is a projection of the past, can a sparse
+signal be recovered from far fewer projections than the Omega(n) separability bound requires?
+
+SHORT ANSWER: yes, it is a theorem, it is from 2010, and its enabling condition is a property this
+architecture already has and was measured to keep.
+
+1. THE RESULT EXISTS AND IS OLD
+
+  Ganguli & Sompolinsky, NIPS 2010, "Short-term memory in neuronal networks through dynamical
+  compressed sensing". Linear recurrent networks can perform compressed sensing of their own past
+  inputs, attaining "a memory capacity that EXCEEDS THE NUMBER OF NEURONS". Made rigorous by
+  Charles, Yap & Rozell, Neural Computation 2014 (arXiv 1307.7970), "Short Term Memory Capacity in
+  Networks via the Restricted Isometry Property": non-asymptotic recovery error bounds, capacity
+  scaling superlinearly with the number of nodes, the gain controlled by input sparsity.
+
+  So the Omega(n) bound quoted in this project is a WORST-CASE bound over arbitrary keys. It does
+  not bind for sparse structured inputs. That much of the conjecture is correct and is not ours.
+
+2. THE ENABLING CONDITION, READ FROM THE PRIMARY SOURCE RATHER THAN THE ABSTRACT
+
+  CORRECTION TO THE FIRST VERSION OF THIS FILE, which said "the enabling condition is orthogonality"
+  on the strength of the abstract. The full paper attributes that to PRIOR work and is more careful:
+
+    "White et al. [5] showed that in the presence of noise, a special class of 'orthogonal'
+     networks, but not generic recurrent networks, could have memory that scales with network size."
+
+  So orthogonality is where the GAUSSIAN-signal capacity scales with N; G&S then show the SPARSE
+  case can exceed N within that class. And Charles, Yap & Rozell 2014 later obtain superlinear
+  capacity for "randomly connected" networks across "several network topologies, including networks
+  with sparse or dense connectivities". Orthogonality is therefore sufficient and the best studied
+  case, NOT proven necessary. The first version of this file overstated it.
+
+  THE STRUCTURAL MATCH IS NONETHELESS CLOSER THAN EXPECTED, and in a way worth stating exactly.
+  The paper's dynamics are
+
+      x(n) = W x(n-1) + v s0(n)                                                          eq. (1)
+
+  with stability required: "if rho is the squared magnitude of the largest eigenvalue of W, then
+  rho < 1". An exactly orthogonal W has rho = 1 and is EXCLUDED. What the literature means by an
+  orthogonal network is eigenvalues spread uniformly on a circle of radius < 1 -- a rotation that
+  preserves dimensionality while decaying uniformly.
+
+  That is precisely Saryu's recurrence. The Householder product is exactly norm-preserving and the
+  convex scalar gate supplies the decay:
+
+      h_t = (1-g) H_2 H_1 h_{t-1} + g c_t
+
+  so the transport contributes the rotation and the gate contributes rho = (1-g) < 1. Saryu is not
+  merely "in the class" by accident of having orthogonal pieces; its two components are exactly the
+  two factors the class is defined by. And trained_geometry.txt measured that training holds both:
+  beta medians 2.000 / 1.998 / 1.998 / 1.988 with zero mass near the singular beta = 1, and gate
+  retention 1/g spanning 11 to 132 tokens, i.e. a spread of rho values across heads.
+
+3. FOUR CAVEATS FROM THE FULL TEXT, ALL OF WHICH NARROW THE CLAIM
+
+  a. THE INPUT IS A SCALAR. Equation (1) drives the network with a scalar signal s0(n) through a
+     fixed vector v. The capacity being compared against N is the length of a recoverable SCALAR
+     history. Our tokens are 744-dimensional embeddings. Nothing here says the result survives
+     high-dimensional input.
+  b. RECOVERY IS OFFLINE L1 MINIMISATION, equation (3), not a forward pass. The theory says the
+     information is PRESENT in the state, not that the network can read it out.
+  c. THE ANALYSIS IS AN ANNEALED APPROXIMATION. The measurement matrix is replaced by one with
+     i.i.d. Gaussian entries of variance rho^k, which "neglects the analytically intractable
+     correlations across columns" that a real dynamical system has. It is not an exact analysis of
+     an actual orthogonal W.
+  d. JAEGER'S SUM RULE still binds the Gaussian case: sum_k M(k) = N for ANY W and v. Total memory
+     is conserved at N. Sparsity is the only thing that buys an escape, and only for signals that
+     really are sparse in some basis.
+
+4. THE CAVEAT THAT STOPS THIS FROM RESCUING THE VECTOR STATE
+
+  The compressed-sensing results are about SHORT-TERM MEMORY OF AN INPUT SEQUENCE: reconstructing
+  the history x_{T-k..T} from the current state. Our failure was ASSOCIATIVE RECALL: return the
+  value bound to a queried key. These are different problems. Recovering the trajectory does not
+  give content-addressing, and CS recovery is an L1 optimisation run offline, not a forward pass.
+
+  So this does NOT overturn the 2026-09-20 matrix decision. Nothing here says a vector state with a
+  diagonal read can do MQAR. It says something about a different axis: how much of the PAST a
+  fixed orthogonal state can retain when the input is sparse.
+
+5. THE ARCHITECTURAL VERSION ALREADY SHIPPED, TWO MONTHS AGO
+
+  Sparse Delta Memory (arXiv 2607.07386, July 2026, Meta FAIR + Inria) extends Gated DeltaNet by
+  replacing the dense key-value outer product with SPARSE reads and writes into a large explicit
+  memory, buying orders of magnitude more state capacity under an isoFLOP constraint, with gains on
+  in-context learning and long-context retrieval. Reference implementation and Triton/CUDA kernels
+  released at github.com/facebookresearch/sparse-delta-memory.
+
+  Note it does not appear to cite the compressed-sensing literature at all; it is an empirical
+  architecture result.
+
+6. THE CITATION CHECK, WHICH IS THE STRONGEST PART OF THIS
+
+  Every paper citing Charles, Yap & Rozell 2014 (arXiv 1307.7970), via Semantic Scholar: 34 papers,
+  2012-2025. They are echo state networks, reservoir computing, Fisher memory, sparse coding and
+  computational neuroscience. The most recent is "Towards a Comprehensive Theory of Reservoir
+  Computing" (2025).
+
+  NOT ONE concerns transformers, linear attention, state space models, Mamba, DeltaNet, sequence
+  models or language modelling. The line stops before modern sequence modelling entirely.
+
+  Searching from the other side finds the adjacent work going the OPPOSITE direction -- Mamba used
+  AS a reconstruction network for compressed-sensing images (SSM-Net), attention reformulated as
+  sparse recovery (CSAT / CS-VLM). Those solve CS problems with sequence models. Nobody appears to
+  have used CS theory to bound what a sequence model's state can hold.
+
+  Sparse Delta Memory (section 5) is the closest architectural work and does not cite this
+  literature at all.
+
+  This is now a reasonably supported gap rather than a guess: a full citation list with zero hits
+  in the target field, plus searches from both directions. It is still not a survey, and "nobody
+  has connected them" is always weaker evidence than "someone has".
+
+7. WHAT WOULD ACTUALLY BE MEASURED, IF THIS BECOMES A DIRECTION
+
+  The theory's claim, translated: a rotation-plus-decay state should retain a RECOVERABLE history
+  of sparse inputs longer than its own dimension. The corresponding measurement here is not MQAR.
+  It is: drive the trained model with a temporally sparse input, then attempt L1 recovery of the
+  input history from the state at time T, and plot recovery error against lag. If history longer
+  than d_h is recoverable, the state holds more than the effective-context measurement suggests,
+  and the bottleneck is again the READ rather than the state -- which would be the second
+  independent time that conclusion arrives.
+
+  FALSIFIER: recovery fails beyond lag ~ d_h, or fails at any lag once the input is a real token
+  embedding rather than a scalar. Caveat (a) above makes the second outcome quite likely.
+
+NOT COVERED BY THIS CHECK
+  The tomography framing proper -- Radon transform, Fourier slice theorem, how many projections
+  reconstruct a volume at a given resolution. Searched only the compressed-sensing and
+  memory-capacity literature.
+
+SOURCES
+  Ganguli & Sompolinsky 2010, NIPS. Short-term memory in neuronal networks through dynamical
+    compressed sensing.
+  Charles, Yap & Rozell 2014, Neural Computation. Short Term Memory Capacity in Networks via the
+    Restricted Isometry Property. arXiv 1307.7970
+  Charles et al. 2014. Analysis of Recurrent Linear Networks for Enabling Compressed Sensing of
+    Time-Varying Signals. arXiv 1408.0202
+  Ganguli & Sompolinsky 2012, Annual Review of Neuroscience 35:485-508. Compressed sensing,
+    sparsity, and dimensionality in neuronal information processing and data analysis.
+  Sparse Delta Memory 2026. arXiv 2607.07386

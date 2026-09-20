@@ -1,0 +1,103 @@
+THE GATE COLLAPSE IS A KNOWN FAILURE WITH A PUBLISHED FIX, AND OUR THREE ATTEMPTS ALL MISSED IT
+Checked 2026-09-20, immediately after gate_retention.py measured the collapse directly.
+
+WHAT WE MEASURED FIRST (gate_retention.txt, 1 pair, gap 64, d_h = 16):
+
+    at initialisation      ~25 tokens of retention (1/g)
+    after 1500 steps         8
+    after 6000 steps         4
+
+Training drives retention DOWN, monotonically, away from the 64 tokens the task requires. Not a
+capacity limit: one single fact, nothing to interfere with it. The model is descending into a
+competing minimum -- discard everything -- which is locally optimal and globally useless.
+
+WHAT THE LITERATURE CALLS THIS. Forget-gate collapse in gated RNNs is a known training failure, and
+the standard remedy is a LOWER BOUND on the forget gate that increases with DEPTH.
+
+HGRN (Qin et al., NeurIPS 2023; mechanism restated in HGRN2, COLM 2024, section 2.2):
+
+    Gamma in R^{L x d}   a DATA-INDEPENDENT LEARNABLE matrix; Gamma_i is the lowest value the
+                         forget gate of layer i may take, at all time steps.
+
+    beta := cumax(Gamma) = cumsum(softmax(Gamma, dim=0), dim=0),   beta^i = [beta]_i in R^d
+
+    all beta are then shifted by beta^0 so the first layer's bound is zero and the top layer's
+    cannot reach one. The forget gate then learns RESIDUALS above the bound:
+
+        f_t^i = beta^i + (1 - beta^i) * g_t^i
+        h_t^i = f_t^i * h_{t-1}^i + (1 - f_t^i) * i_t^i
+
+    "HGRN argues that this lower bound should be monotonically increasing from bottom to top,
+     encouraging the bottom layers to model short-term local dependencies and the upper layers to
+     model long-term dependencies."
+    "This additive lower bound approach has been shown to mitigate the issue of saturated gates."
+
+WHY OUR THREE ATTEMPTS FAILED, WHICH IS NOW EXACTLY DIAGNOSABLE. All three are in model.py and all
+three are recorded as failures in gate_timescales.txt. Each differs from HGRN on the points that
+matter:
+
+  attempt 1  `timescales`         per-HEAD log-spaced bias ladder gh = logspace(0.5, 1e-4, H),
+                                  IDENTICAL IN EVERY LAYER. Training moved the bias; every head
+                                  ended at 2-4 tokens.
+  attempt 2  `freeze_gate_bias`   froze the bias so the ladder could not be destroyed. Training
+                                  grew the INPUT weights instead and routed around it.
+  attempt 3  `gate_ceiling`       g = torch.minimum(g, g_max), a HARD CLAMP, per head, per-layer
+                                  identical.
+
+  FOUR DIFFERENCES, and the last two are the ones that matter most:
+
+    axis          ours varies the bound across HEADS within a layer; HGRN varies it across LAYERS.
+                  Our own arm D is independent evidence for the layer axis: at L=4 the long-retention
+                  head appeared in LAYER 2, which is also where trained_geometry.txt found the 86-
+                  and 132-token heads on the shipped 25M checkpoint. Two layers never produced one
+                  at any step count.
+    learnable     ours is a fixed constant ladder; HGRN's Gamma is a trained parameter.
+    monotone      ours is monotone only at initialisation and training can undo it; cumax makes the
+                  bound monotone BY CONSTRUCTION -- a cumulative sum of a softmax is non-decreasing,
+                  so no gradient step can break the ordering.
+    gradient      ours enforces the bound by CLAMPING, and torch.minimum has ZERO GRADIENT wherever
+                  the clamp is active, so the moment the bound binds it stops teaching anything.
+                  HGRN reparameterises: f = beta + (1-beta)*g keeps the bound differentiable at all
+                  times. That is precisely the "mitigate saturated gates" claim, and it is the
+                  difference between a constraint the optimiser learns through and one it dies
+                  against.
+
+  Note the clamp problem is a repeat. The flip-flop experiment earlier in this project was recorded
+  VOID because its gate clamp never fired and both arms were bit-identical. Clamps have now cost us
+  two experiments.
+
+WHAT THIS MEANS FOR THE PROJECT
+
+  The gap-64 retention wall was recorded as architectural. It is a known trainability failure with a
+  published, cheap, architectural remedy that we tried three variants of and got wrong each time on
+  the same two axes.
+
+  This is the THIRD time in this session that a published design was reproduced without a component
+  its own paper names as load-bearing:
+    1. DeltaNet without the short causal convolution        0.094 -> 0.961 once added
+    2. the HRR cell without cleanup                          under test now
+    3. a gate ladder without a per-layer differentiable bound  this file
+
+  The common shape is not ignorance of the literature -- all three papers were in refs.bib. It is
+  reimplementing the headline mechanism and dropping the part that makes it train.
+
+  IMPORTANT SCOPE LIMIT. This does not reopen the matrix decision. The read is a separate axis, and
+  the crossover (matrix 0.984 vs vector 0.023 at 8 pairs) was measured at gap 4, where retention is
+  not the binding constraint. What it reopens is the RETENTION axis, which was closed on the
+  strength of runs whose gates we had never inspected.
+
+WHAT TO DO, AND THE FALSIFIER
+  Implement the HGRN-style bound in SaryuV3Block: a learnable Gamma over layers, cumax for
+  monotonicity, additive residual gate, replacing the clamp. Then rerun 1 pair at gap 64.
+  FALSIFIER: if retention still collapses below 64 with the differentiable per-layer bound in
+  place, the gate is genuinely not the constraint and gate_timescales.txt's conclusion -- "the write
+  rule is the constraint, not the gate" -- stands for MQAR as well as for enwik8.
+
+SOURCES
+  Qin et al. 2023. Hierarchically Gated Recurrent Neural Network for Sequence Modeling. NeurIPS
+    2023. arXiv 2311.04823
+  Qin et al. 2024. HGRN2: Gated Linear RNNs with State Expansion. COLM 2024. arXiv 2404.07904
+    (section 2.2 restates the HGRN lower bound; equations quoted above are from this paper)
+  Gu et al. 2020, cited by HGRN2 for the saturated-gate argument.
+  Choromanska et al. 2015. The Loss Surfaces of Multilayer Networks. (spin-glass mapping)
+  Related, checked separately: literature_compressed_sensing.txt, literature_tomography.txt

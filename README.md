@@ -37,9 +37,10 @@ Independent open research, built in India.
 *What can a fixed-size recurrent state actually represent, and what does it do when it cannot?*
 
 A vector state carries order and position well, and this project has group-theoretic results saying
-exactly how much. It does not carry many independent facts, and the reason turned out to be the
-*read* rather than the state — which is why a matrix memory is now part of the design rather than a
-planned extension.
+exactly how much. It does not carry many independent facts. A matrix memory read by contraction
+does — a faithful DeltaNet solves the recall task at 1.000 on three seeds where this recurrence
+sits at 0.32 — so it is now part of the design rather than a planned extension. Whether a *wide
+vector* with proper binding would do as well is untested and openly recorded as such.
 
 ## What the research found
 
@@ -77,13 +78,20 @@ bounds what a product of reflections *could* store; it does not say this recurre
 recall held at ~0.32 for four key–value pairs across 170 runs and 21 interventions, every one of
 which changed the transport, the write or the training order. A 290,370-parameter transformer
 solves the identical task at 1.000, so the task was solvable all along and the wall was ours
-([`evidence/baseline_transformer.py`](evidence/baseline_transformer.py)). The cause is the
-common-factor derivation [below](#why-it-is-built-this-way): nothing that leaves the read alone can
-work, which is why twenty-one things that did not touch it all returned the same number. Seven
-counting arguments and five constructions that predicted ~0.97 were falsified along the way; the
-standing conclusion is that constructions here verify the mathematics and have no demonstrated
-predictive value for what gradient descent actually finds
-([`evidence/cell_shootout.py`](evidence/cell_shootout.py)).
+([`evidence/baseline_transformer.py`](evidence/baseline_transformer.py)). Replacing the read with a
+contraction `S q` does solve it: a faithful DeltaNet scores 1.000 on three seeds
+([`evidence/delta_reference.py`](evidence/delta_reference.py), `runs/dref-*`). That is consistent
+with the common-factor derivation [below](#why-it-is-built-this-way), and it is *consistency*, not
+proof — the alternative, a wide vector with proper binding, has never been run at the same standard,
+so "the read is the wall" is the best available reading rather than a demonstrated result.
+
+An earlier version of this section stated it as demonstrated, citing a comparison table that had no
+run behind it. Those figures are retracted; see [`evidence/CLAIMS.md`](evidence/CLAIMS.md) #25. The
+surrounding claims — a 290,370-parameter transformer at 1.000, this recurrence at ~0.32, seven
+falsified counting arguments, five constructions that predicted ~0.97 and trained at 0.25–0.31 —
+are all backed by logged runs and stand. The standing conclusion that constructions here have no
+demonstrated predictive value for what gradient descent finds stands with them, and #25 is the
+sharpest example of why.
 
 **A trained transport can be read as a representation.** Its character norm `⟨χ,χ⟩`, computed from
 traces alone with no group table and no labels, identifies which quotient it learned. Over sixteen
@@ -150,9 +158,16 @@ rises. The real cause is narrower than either account. Unrolling the recurrence 
 so the query's transport is a *common factor* over every stored item: it reorients all of them
 together and cannot pick one out of a sum. Selection is left to a diagonal output gate, which has no
 item axis. A contraction read `S q = Σ_i v_i (k_i · q)` has one. At equal state size on the same
-task: matrix with a contraction read scores 0.984 with 100,803 parameters, the shipped vector with
-a diagonal gate 0.32 with 387,218 ([`evidence/cell_shootout.py`](evidence/cell_shootout.py),
-[`results/matrix_decision.txt`](evidence/results/matrix_decision.txt)). Saryu is adopting the matrix
+task: a faithful DeltaNet — matched component by component against the reference implementation —
+solves it at **1.000** on three seeds, where the shipped vector with a diagonal gate sits at 0.32
+([`evidence/delta_reference.py`](evidence/delta_reference.py), `runs/dref-*`).
+
+**Retraction.** This passage previously cited 0.984 against 0.32 from `results/matrix_decision.txt`,
+along with a matrix-versus-vector comparison, a crossover table and a head-structure table. None of
+them had a run behind them; the logged runs of that experiment scored 0.133–0.164. The direction
+survived and has been re-earned from new logged runs, but the *comparison* has not: the vector arm
+has never been run with the same care, so "the matrix beats a wide vector" is an open question here,
+not a result. Saryu is adopting the matrix
 state with a targeted rank-one erase — a known design that DeltaNet and the models built on it
 already ship, not something invented past it. The Householder-product transition stays, and that is
 the part that is ours.

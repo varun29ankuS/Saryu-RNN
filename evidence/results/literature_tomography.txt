@@ -1,0 +1,97 @@
+THE TOMOGRAPHY / ANGULAR-MULTIPLEXING FRAMING, AND WHY IT IS WRONG FOR THIS RECURRENCE
+Checked 2026-09-20, as the second half of the question that produced literature_compressed_sensing.txt.
+
+SHORT ANSWER: the framing is seductive, it has a real literature behind it, it makes a sharp
+quantitative prediction, and this project's OWN existing data contradicts that prediction
+monotonically and in both directions. Killed before it was written into anything.
+
+1. THE FRAMING
+
+  Tomography reconstructs an object from projections taken at different angles. The Fourier slice
+  theorem says the 1D transform of a projection at angle theta is a slice through the object's
+  transform at theta, so k projections give k slices. The Crowther criterion sets how many are
+  needed: m = pi*D/d for an object of diameter D at resolution d. Note what that does NOT depend
+  on -- the NUMBER OF OBJECTS. Projection count scales with resolution, which is a genuinely
+  different bound from the Omega(n) separability bound this project has been quoting.
+
+  The physical version is angle-multiplexed volume holography: many pages are stored in one volume,
+  each written with a different reference-beam angle, each recovered by illuminating at that angle.
+  Capacity is set by Bragg selectivity -- how finely angles can be distinguished -- which improves
+  with the thickness of the medium.
+
+  The mapping to our recurrence is almost too neat. Each stored item enters the state after a
+  different accumulated rotation, so items are written at DIFFERENT ANGLES. Reading is then angular
+  demultiplexing. And the "Bragg selectivity" has an exact counterpart already measured in this
+  repository: the trace, tr(H)/d = 1 - 2*n_h/d_h, is precisely the overlap between a vector and its
+  image, i.e. how distinguishable two nearby angles are. Under this reading the trace law IS the
+  angular selectivity of the memory, and tr/d_h = 0.957 on the 25M checkpoint says consecutive
+  angles overlap at 95.7 percent -- almost no selectivity -- which would explain the recall failure
+  in a well-established physical language with known capacity formulas.
+
+2. THE PREDICTION IT MAKES, WHICH IS WHAT KILLED IT
+
+  If items are indexed by accumulated rotation, then two items separated by more tokens are
+  separated by more rotation, and are therefore EASIER to tell apart. Recall should RISE with the
+  gap between the stored pairs and the query.
+
+  Quantitatively, at n_h = 2 and d_h = 16 the per-step overlap is c = 1 - 4/16 = 0.75, so two items
+  k tokens apart have angular overlap 0.75^k:
+
+      gap 0  (adjacent pairs, 2 tokens apart)   overlap 0.75^2  = 0.563   poorly separated
+      gap 4                                     overlap 0.75^6  = 0.178   well separated
+      gap 64                                    overlap 0.75^66 = 5e-9    essentially orthogonal
+
+  So the framing predicts gap 64 is the EASIEST case, by a wide margin.
+
+3. THE MEASUREMENT, WHICH ALREADY EXISTED
+
+  nh_sweep_shortgap.txt, n_h = 2, d_h = 16, chance 0.016:
+
+      pairs \ gap        0        4       64
+          1          1.000    1.000    0.012
+          2          0.711        -        -
+          4          0.199    0.113    0.012
+
+  Recall falls MONOTONICALLY with gap, on both rows. At one single pair -- where there is nothing
+  to separate from and the angular story has no work to do at all -- a 64-token gap still takes
+  recall from 1.000 to chance. The prediction is not merely unsupported, it is inverted, and the
+  one-pair row shows the dominant effect is not about separation in the first place.
+
+4. WHY IT FAILS, WHICH IS WORTH MORE THAN THE FRAMING WOULD HAVE BEEN
+
+  The disanalogy is exact and it is the same one that killed the n_h ladder. In volume holography
+  the MEDIUM IS PASSIVE between writes: a page written at angle theta_1 sits untouched while later
+  pages are written at other angles. In this recurrence every later token applies its transport to
+  the WHOLE state, including everything already stored. The rotation does not index items, it
+  scrambles all of them together, and the transports do not cancel.
+
+  So the angle is not a durable address. It is re-randomised on every subsequent token, which is
+  why more intervening tokens make things worse rather than better.
+
+5. WHAT SURVIVES
+
+  The Crowther observation survives as a general fact -- measurement count scales with resolution,
+  not object count -- but it does not apply here, for the reason in section 4.
+
+  More usefully, the failure points where two other routes already pointed. Angular indexing would
+  work if a stored item were PROTECTED from the transports of intervening tokens. A rank-one
+  targeted erase, S <- S(I - beta k k^T), is exactly that protection: it touches one direction and
+  leaves items with orthogonal keys alone. That is the third independent route to the same
+  conclusion as matrix_decision.txt -- targeted write, selecting read -- arriving this time from
+  optics rather than from the unrolled recurrence or from the trained comparison.
+
+6. HONEST NOTE ON PROCESS
+
+  This framing was close to being written up. It explains the trained model's number (0.957), it
+  connects to a real literature with real capacity formulas, and it reuses a quantity we had
+  already measured. It took one existing table to falsify, and that table was already in the repo.
+  Catch mechanism: checked a seductive framing against own prior data BEFORE writing it up.
+  Logged in CLAIMS.md.
+
+SOURCES
+  Crowther criterion. m = pi*D/d for an object of diameter D at resolution d.
+  Fourier slice theorem / filtered back projection, standard tomographic reconstruction.
+  Angle-multiplexed volume holographic storage; capacity set by Bragg angular selectivity, which
+    scales with medium thickness.
+  Plate. Holographic Reduced Representations. IEEE Trans. Neural Networks 1995.
+  Related, and checked separately: literature_compressed_sensing.txt

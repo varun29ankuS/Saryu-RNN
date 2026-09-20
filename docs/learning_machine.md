@@ -19,10 +19,16 @@ operations**:
 transport is a *common factor* over everything stored: it reorients all items together, so it cannot
 pick one out of a sum. Selection needs an item axis, and `Sq = Σ_i v_i (k_i·q)` has one.
 
-**MEASURED** (`evidence/cell_shootout.py`, `results/matrix_decision.txt`). At equal state size the
-store scores 0.984 and the transport-plus-gate 0.32. Twenty-one interventions that changed the
-transport, the write, or the training order all returned ~0.32, because none of them touched the
-read.
+**MEASURED** (`evidence/delta_reference.py`, `runs/dref-*`). A faithful DeltaNet solves 4-pair
+MQAR at 1.000 on three seeds; the shipped transport-plus-gate sits at 0.32. Twenty-one
+interventions that changed the transport, the write, or the training order all returned ~0.32,
+because none of them touched the read.
+
+**RETRACTED.** This paragraph previously cited 0.984 from `results/matrix_decision.txt` together
+with a matrix-versus-vector comparison. Neither had a run behind it. The logged runs of that
+experiment scored 0.133–0.164, because the cell was missing five components the reference
+implementation has. The conclusion above is re-earned from new logged runs; the *comparison* is
+not, and is withdrawn.
 
 The design principle worth keeping: **a recurrence that conflates tracking with storage gets
 neither.** Saryu had strong machinery for the first and none for the second.
@@ -55,11 +61,12 @@ attempts to install this ladder by hand — fixed timescales, a frozen gate bias
 all collapsed to 2–3 tokens within 1000 steps (`gate_timescales.txt`). Where we intervened it died;
 where we left it alone it appeared.
 
-**Organisation beats size at a fixed budget.** MEASURED, `evidence/arity_test.py` and the crossover
-in `results/matrix_decision.txt`. Holding state floats fixed and varying only how they are
-organised: at 8 pairs the matrix scores 0.984 and the vector 0.023 — while the *losing* side carried
-six times more parameters. The recall literature reports a single "state size" axis; size and
-factorisation are separable, and factorisation is the one that matters.
+**Organisation beats size at a fixed budget.** ~~MEASURED~~ **RETRACTED.** This rested on a
+crossover table in `results/matrix_decision.txt` with no run behind it — no experiment in this
+project's history has ever paired a matrix or vector cell with 8 pairs. The construction in
+`evidence/arity_test.py` still stands as a construction, and this project's own record says
+constructions here have no demonstrated predictive value for trainability. Separating size from
+factorisation remains an interesting claim and an untested one.
 
 ---
 
