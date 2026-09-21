@@ -82,7 +82,11 @@ ARMS = [
     ('B gap64 L2 1500', 64, 2, 1500),
     ('C gap64 L2 6000', 64, 2, 6000),
     ('D gap64 L4 1500', 64, 4, 1500),
+    # E is the test registered in results/literature_gate_lower_bound.txt: the same failing
+    # configuration as D, with the HGRN-style differentiable per-layer lower bound switched on.
+    ('E gap64 L4 1500 +lb', 64, 4, 1500),
 ]
+GATE_LB = {'E'}                      # arms whose first letter is here get gate_lb=True
 # ONLY=D re-runs the depth arm alone at more seeds. Its first result was 1.000 and 0.031 on two
 # seeds, which is a lottery ticket, not a fix; the statistic is the SOLVE RATE over seeds.
 ARMS = [a for a in ARMS if a[0][0] in os.environ.get('ONLY', 'ABCD')]
@@ -116,11 +120,17 @@ def gate_retention(m, x):
     caught = {}
     hooks = []
 
+    # The bound must be applied HERE too, or this probe reports the unbounded gate and arm E's
+    # numbers are meaningless -- it would measure a quantity the recurrence does not use.
+    lb = m.gate_bounds() if getattr(m, 'gamma', None) is not None else None
+
     def mk(i, blk):
         def hook(_mod, _inp, out):
             g = ((1.0 - torch.cos(out)) / 2.0).clamp(max=blk.gate_cap)
             if blk.g_max is not None:
                 g = torch.minimum(g, blk.g_max)
+            if lb is not None:
+                g = g * (1.0 - lb[i])
             caught[i] = g.mean(dim=(0, 1))                  # [H], averaged over batch and time
         return hook
 
@@ -137,13 +147,15 @@ def gate_retention(m, x):
 
 def run_arm(tag, gap, nl, steps, seed):
     torch.manual_seed(seed)
-    m = SaryuV3LM(NENT + 2, D, nl, nh=NH, H=H)
+    use_lb = tag[0] in GATE_LB
+    m = SaryuV3LM(NENT + 2, D, nl, nh=NH, H=H, gate_lb=use_lb)
     opt = Muon(list(m.parameters()), lr=LR)
     rng = np.random.default_rng(1000 + seed)
     ev = np.random.default_rng(7)
     log = Run(f'gret-{tag.split()[0]}-g{gap}-L{nl}-s{seed}',
               config=dict(arm=f'gate_retention/{tag}', pairs=1, gap=gap, nl=nl, nh=NH, H=H, d=D,
-                          dh=D // H, steps=steps, seed=seed, chance_top1=round(1 / NENT, 4)))
+                          dh=D // H, steps=steps, seed=seed, gate_lb=use_lb,
+                          chance_top1=round(1 / NENT, 4)))
     best = 0.
     for s in range(steps):
         x, y = batch(rng, BS, 1, gap)
@@ -193,7 +205,13 @@ def main():
                   flush=True)
     print(f'\n{time.time()-t0:.0f}s\n')
     print('READ, against the registered predictions')
-    b = next(r for r in rows if r[0].startswith('B'))
+    b = next((r for r in rows if r[0].startswith('B')), None)
+    if b is None:                      # ONLY= excluded arm B; nothing to compare P1 against
+        for r in rows:
+            print(f'  {r[0]}: solved {sum(a > 0.8 for a in r[2])}/{SEEDS}, retention per seed '
+                  + ', '.join(f'{x:.0f}' for x in r[4]) + ' tok')
+        print('  solve RATE is the statistic here, not the mean -- the outcome is bimodal.')
+        return
     bmax = max(b[4])
     print(f'  P1 arm B retention {bmax:.0f} tokens (best seed) against a 64-token gap: '
           f'{"HOLDS -- overwritten before the query" if bmax < 64 else "FAILS"}')

@@ -58,6 +58,41 @@ def test_kernel_is_exact_at_every_chunk_size(C):
     assert err < 1e-4, (C, err)
 
 
+@pytest.mark.parametrize('L', [7, 8, 16, 19, 64])
+def test_memory_chunk_kernel_equals_sequential_recurrence(L):
+    """The matrix memory's chunk-parallel form is EXACT, not an approximation.
+
+    Same contract as the level-1 kernel above: USE_KERNEL is a speed switch and never a semantic
+    one. Lengths that are not a multiple of the chunk are included because the padding path is
+    where an off-by-one would hide."""
+    torch.manual_seed(0)
+    blk = SaryuV3LM(64, 128, 1, memory=True).double().eval().mix[0]
+    z = torch.randn(3, L, 128, dtype=torch.double)
+    try:
+        SaryuV3Block.USE_KERNEL = True
+        fast = blk.recall(z)
+        SaryuV3Block.USE_KERNEL = False
+        slow = blk.recall(z)
+    finally:
+        SaryuV3Block.USE_KERNEL = True
+    assert torch.allclose(fast, slow, atol=1e-10), (fast - slow).abs().max().item()
+
+
+def test_memory_off_is_bit_identical_to_the_default():
+    """Turning the memory on must never change a model that is not using it."""
+    torch.manual_seed(0)
+    base = SaryuV3LM(64, 128, 2)
+    mem = SaryuV3LM(64, 128, 2, memory=True)
+    missing, unexpected = mem.load_state_dict(base.state_dict(), strict=False)
+    assert not unexpected
+    assert all(n.split('.')[-2].startswith('m') for n in missing), missing
+    x = torch.randint(0, 64, (2, 16))
+    base.eval(); mem.eval()
+    with torch.no_grad():
+        # m_out is zero-initialised, so the memory path contributes exactly nothing at step 0
+        assert torch.equal(mem(x), base(x))
+
+
 def test_pure_reflection_preserves_norm():
     """beta = 2 with no gate (a=1, b=0) is an orthogonal map: the state norm cannot change."""
     torch.manual_seed(1)

@@ -1,0 +1,75 @@
+STATE VOLUME  4 pairs, gap 4, sequence length 14, d=128 H=8 L=2, 3000 steps, 2 seeds
+memory_on.txt (gap 4, 3000 steps): off 0.234/0.281, on 0.875/0.977
+
+  memory=False recall 0.234, 0.281
+  memory=True  recall 0.930, 0.938
+
+1. CAUSAL ABLATION at the query position -- where is the answer actually stored?
+   memory=False seed 0: full=0.238  transport=0.000
+   memory=False seed 1: full=0.242  transport=0.020
+   memory=True  seed 0: full=0.926  memory=0.086  transport=0.906   ablating memory costs +0.840
+   memory=True  seed 1: full=0.957  memory=0.125  transport=0.945   ablating memory costs +0.832
+
+2. GATE RETENTION 1/g per layer, mean over heads  (the transport's tube length)
+   memory=False layer 0: mean 3741.7, 5947.9   max 6075.5, 13445.0
+   memory=False layer 1: mean 2601.0, 1495.4   max 17815.4, 11009.6
+   memory=True  layer 0: mean 10583.3, 10356.8   max 25214.9, 25691.8
+   memory=True  layer 1: mean 4072.7, 8023.2   max 13654.6, 38542.5
+
+3/4. AUTOCORRELATION vs lag   cos(x_t, x_t+D), mean over t and heads
+                        path  D=1     D=2     D=4     D=8     D=16    D=24  
+  transport L0, memory=False  +0.640  +0.893  +0.779  +0.543  +nan  +nan
+  transport L1, memory=False  +0.927  +0.937  +0.896  +0.842  +nan  +nan
+   transport L0, memory=True  +0.788  +0.887  +0.802  +0.619  +nan  +nan
+   transport L1, memory=True  +0.860  +0.880  +0.827  +0.729  +nan  +nan
+              MEMORY read L0  +0.706  +0.625  +0.483  +0.327  +nan  +nan
+              MEMORY read L1  +0.845  +0.839  +0.739  +0.627  +nan  +nan
+
+820s
+READ
+  P1 holds if ablating the memory at the query position collapses accuracy while
+     ablating the transport there costs less. Smoothness cannot pass that.
+  P1 FALSIFIED if accuracy survives the memory ablation -- then the fact is not in the
+     matrix and the mechanism in model.py is wrong however good the score looks.
+  P2 holds if gate retention moves when the memory is switched on.
+  The autocorrelation table is DESCRIPTION, not a test: the memory is an accumulator
+  and is autocorrelated by construction, so it would pass holding nothing.
+
+READ -- WHAT THIS ESTABLISHES AND WHAT IT DOES NOT
+
+P1 HOLDS, DECISIVELY. THE FACT IS IN THE MATRIX.
+  Ablating the memory read at the query position only: 0.926 -> 0.086 and 0.957 -> 0.125.
+  Ablating the transport at the same position: 0.926 -> 0.906 and 0.957 -> 0.945.
+  A cost of 0.84 against 0.02. The accuracy gain in memory_on.txt is not "a bigger model does
+  better" -- the answer is being read out of the matrix, and an accumulator that held nothing
+  retrievable would lose nothing when zeroed. The mechanism written into model.py's comments is
+  the mechanism actually operating.
+
+  The mirror image is as sharp. With memory=False, ablating the transport takes 0.238 -> 0.000.
+  Without a memory the transport was carrying the whole task, at 0.24.
+
+P2 MOVED, BUT NOT IN THE WAY THAT WOULD SUPPORT "THE PATHS COMPOSE".
+  Gate retention 1/g, layer 0 mean:  memory=False 3742, 5948  ->  memory=True 10583, 10357.
+  It roughly tripled and it is consistent across seeds, so the transport's behaviour really does
+  change when the memory is switched on. That is all P2 registered, and it holds.
+
+  But the honest reading is NOT a division of labour. Retention of ~10,000 tokens on a sequence
+  of length 14 means the gate has essentially stopped writing -- the measure is far past
+  saturation and the state is close to frozen. Put that beside the ablation, where the transport
+  contributes 0.02 of 0.93, and the picture is that the transport WENT QUIET rather than
+  reallocated to tracking.
+
+  Which is correct behaviour, not a fault: MQAR has no order structure to track. There is nothing
+  for the transport to do here, so going quiet is the right answer. It also means THIS TASK CANNOT
+  DEMONSTRATE COMPLEMENTARITY, only takeover. The autocorrelation supports the same reading --
+  the trained memory read is now LESS autocorrelated than the transport (0.327 vs 0.619 at lag 8),
+  the reverse of the untrained run, because the memory is actively erasing and rewriting while
+  the transport sits still.
+
+STILL UNTESTED, and now with a clear specification. Complementarity needs a task that requires
+BOTH an ordering and a set of facts -- where the answer depends on which fact was stored AND on
+the order things occurred. Every task in this repository isolates one axis. Until such a task
+exists, "the transport tracks while the memory stores" is a design intention supported on one
+half and untested on the other.
+
+Every number above is logged: runs/vol-off-p4-g4-s0,s1 and runs/vol-on-p4-g4-s0,s1.

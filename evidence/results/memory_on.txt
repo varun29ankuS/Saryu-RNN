@@ -1,0 +1,23 @@
+MEMORY ON/OFF  shipped SaryuV3LM, 4 pairs, d=128 H=8 nh=2 L=2, 3000 steps, 2 seeds, chance 0.250
+logged: saryu 0.289-0.336   transformer 1.000 x3   faithful DeltaNet 1.000 x3
+
+  memory=False   387,218 params   0.234, 0.281
+  memory=True    524,226 params   0.875, 0.977
+
+1858s
+
+READ
+  Registered prediction was memory=True > 0.8 and memory=False ~ 0.32. Both hold.
+  0.875 and 0.977 against 0.234 and 0.281, the only difference being the flag.
+
+  This is the first time in this project that Saryu has exceeded 0.39 on 4-pair MQAR. 170+ runs
+  and 21 interventions -- all of which changed the transport, the write or the training order --
+  held at ~0.32. The read was the one thing none of them touched.
+
+  NOT CLAIMED. It is below the 1.000 that the same memory reaches standalone (runs/dref-*) and
+  that the transformer reaches (base-transformer-p4-*), on two seeds at 3000 steps against the
+  reference's 4000. Whether the gap is budget, seeds, or something the block does to the memory
+  is unmeasured. And this says nothing about whether a wide vector with proper binding would do
+  as well -- that arm has still never been run at this standard, so CLAIMS.md #20 stays open.
+
+  Every number above is logged: runs/memon-off-p4-s0,s1 and runs/memon-on-p4-s0,s1.

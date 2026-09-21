@@ -1,0 +1,70 @@
+THE CLOCK MATTERS. THE FREQUENCIES DO NOT. BOTH NUMBER-THEORY PREDICTIONS FALSIFIED.
+Distance task: random tokens, a marker, a distance k, answer the token k positions back.
+seq 48, vocab 32, chance 0.031, 3000 steps, 2 seeds.
+
+  arm         ratio structure       best per seed    k=2    k=5    k=11   k=23   k=43
+  none        --                    0.141, 0.219    0.609  0.156  0.089  0.062  0.036
+  ---- properly scaled arms -----------------------------------------------------------
+  primes      co-prime integers     0.523, 0.539    0.977  0.924  0.612  0.188  0.086
+  ratio32     RATIONAL ratio 1.5    0.594, 0.539    0.964  0.951  0.630  0.240  0.081
+  golden      phi, most irrational  0.523, 0.570    0.961  0.919  0.576  0.148  0.076
+  evens       every period gcd 2    0.547, 0.531    0.977  0.870  0.568  0.258  0.055
+
+P1 CONFIRMED, AND IT IS THE RESULT. No clock 0.180, any clock 0.53-0.57. A recurrence gets ORDER
+for free -- non-commuting transports are order sensitivity, which is what the group results here
+are about -- and gets DISTANCE not at all. A phase rotation on what is written triples performance
+on a task that asks how far back something was.
+
+P2 FALSIFIED. golden (phi = 1.618, the most irrational number, strongest protection against Arnold
+tongues) 0.547 against ratio32 (rational 1.5) 0.567. The RATIONAL ratio is slightly ahead. Mode
+locking and resonance are not operating.
+
+P3 FALSIFIED. primes (co-prime, 2-19) 0.531 against evens (every period shares gcd 2, 2-20) 0.539.
+The arm chosen to have the WORST lcm does slightly better. Co-primality is not operating.
+
+All four well-scaled arms are within seed spread of one another. Frequency choice is not a
+number-theoretic question.
+
+WHAT ROUND 1'S RANKING ACTUALLY WAS. It looked like none < geometric < powers2 < primes, which fit
+the CRT story. Both gaps were scaling artefacts:
+  powers2 had a DEAD HEAD -- ang_0 = 2*pi/2^0 is a full turn, i.e. the identity, so that arm ran on
+    seven heads while primes ran on eight.
+  geometric was MIS-SCALED -- 10000^(-h/8) puts six of eight periods beyond the 48-token sequence,
+    so most of its heads barely rotated. That tested RoPE at the wrong scale, not RoPE's choice.
+Fix the scaling and the ordering disappears. What remains is: have a clock, and put its periods
+inside the sequence length.
+
+THE SEQUENCE OF WRONG MECHANISMS, kept because it is the point.
+  1. LCM / Chinese Remainder. Predicted co-prime periods extend unambiguous range, so arms should
+     agree at short distances. They did not (0.609 to 0.979 at k=2). Wrong, but it predicted the
+     round-1 ranking correctly -- the most dangerous way to be wrong.
+  2. Arnold tongues / resonance. Predicted irrational ratios beat rational ones, and explained why
+     the effect appears at every distance. Wrong: the rational ratio wins.
+  3. What is left is not a mechanism but a constraint: the periods have to fit the sequence.
+
+Two predictions registered in advance, both falsified, and the falsifier said this outcome closes
+the line rather than leaving it open. It is closed. Frequency choice is an empirical
+hyperparameter with no principle behind it at this scale.
+
+WHAT IS WORTH TAKING FORWARD. Not primes, not phi. The finding that a recurrent state has no
+distance sense, and that a cheap phase rotation on the write supplies one. saryu/model.py has no
+positional encoding, correctly, because order is free -- and this says distance is a separate thing
+we do not have. experimental/memory/saryu_block.py already contains phase_rot, untrained.
+
+NOT ESTABLISHED: no baseline. A transformer with RoPE would likely solve this task outright, and
+0.55 would then be a capacity limit rather than a clock limit. Nothing here is about language.
+
+Every number is logged under runs/clk-*.
+
+INDEPENDENTLY REPRODUCED, by accident. The numbers above were collected in foreground batches, one
+arm at a time, after a backgrounded run appeared to die. It had not died -- it was slower than I
+had patience for, finished in 2839s, and wrote its output into this file after it had been
+committed, splicing itself through the middle of the text. The splice was noticed, the file
+restored from git, and the zombie's numbers checked against the foreground ones:
+
+    golden 0.523, 0.570   primes 0.523, 0.539   evens 0.547, 0.531
+
+Identical in every digit. Two independent executions agree, which is better evidence than the one
+run intended -- but it is the second time today a result was confirmed by an infrastructure
+failure rather than by design, and the first time a completed run silently overwrote a committed
+file. Foreground batches for anything whose output is being written up.

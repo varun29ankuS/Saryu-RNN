@@ -1,0 +1,51 @@
+THE GATE LOWER BOUND FIXES THE RETENTION COLLAPSE. THE FALSIFIER DID NOT FIRE.
+1 pair, gap 64, d_h = 16, depth 4, 1500 steps. Chance 0.016.
+
+                            solve rate    max retention 1/g, deepest layers
+  D  depth 4, no bound         1/3        L2:669 L3:7 | L2:2 L3:1 | L2:2 L3:1
+  E  depth 4, + bound          3/3        L3:1826 | L3:3477 | L3:1306
+  E  second launch             3/4        1.000, 1.000, 1.000, 0.008
+
+  Combined: 6 of 7 seeds solve WITH the bound, 1 of 3 WITHOUT.
+
+PROVENANCE, stated because it was not a clean single run. The first launch appeared to die -- three
+runs logged, a zero-byte output file, and a task notification reporting exit 0. A replacement was
+started for arm E alone. The original was in fact still alive and finished afterwards, so there are
+TWO independent measurements of arm E, from separately seeded launches, and they agree. That is
+better evidence than one clean run, but it was luck rather than design.
+
+WHAT WAS REGISTERED, in results/literature_gate_lower_bound.txt, before this was built:
+  "FALSIFIER: if retention still collapses below 64 with the differentiable per-layer bound in
+   place, the gate is genuinely not the constraint and gate_timescales.txt's conclusion -- 'the
+   write rule is the constraint, not the gate' -- stands for MQAR as well as for enwik8."
+
+It did not collapse. Layer 3 holds 1,306 to 3,477 tokens against a 64-token gap, where the
+unbounded model's deepest layers sat at 1 to 7.
+
+WHAT THIS ESTABLISHES
+  The retention half of the gap wall was a TRAINABILITY failure, not an architectural one. The gate
+  could always express long memory -- gate_retention.txt measured it being driven DOWN, 25 -> 8 -> 4
+  tokens, away from what the task needs. Gradient descent was actively destroying retention because
+  once the task is unsolvable, holding state only adds variance to the loss. The bound removes that
+  escape, and the model then finds the solution 6 times in 7 instead of 1 time in 3.
+
+WHY THE THREE EARLIER ATTEMPTS FAILED, now confirmed rather than inferred. timescales,
+freeze_gate_bias and gate_ceiling all enforced the ladder by CLAMPING or freezing. torch.minimum has
+zero gradient wherever it binds, so the constraint stops teaching at the moment it applies, and
+training routed around it every time. The working version is multiplicative -- g <- (1-beta)*g -- so
+gradient reaches g at every value of the bound, and monotonicity is structural via cumsum-of-softmax
+rather than an initialisation training is free to undo.
+
+WHAT IT RETIRES
+  gate_timescales.txt concluded "the write rule is the constraint, not the gate". For MQAR
+  retention that is now wrong: it was the gate. The enwik8 effective-context finding is a separate
+  measurement and is untouched by this.
+
+WHAT IT DOES NOT ESTABLISH
+  - One task, one configuration, 1500 steps, d_h = 16. Nothing here is about language.
+  - The CAPACITY half is untouched. This is 1 pair. nh_sweep_shortgap separated capacity and
+    persistence as two axes; the matrix memory addressed capacity, this addresses persistence, and
+    no run has yet tested them together at a gap where both bind.
+  - The 1/3 baseline for arm D rests on 3 seeds and is bimodal. It is a solve RATE, not a mean.
+
+Every number is logged under runs/gret-*.

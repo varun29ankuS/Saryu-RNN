@@ -1,0 +1,18 @@
+PRIME CLOCK  seq 48, distances [2, 5, 11, 23, 43], vocab 32, chance 0.031, 3000 steps, 2 seeds
+powers2 periods share every factor (lcm 2,4,8,16 = 16); primes do not (lcm = product)
+
+     clock  best per seed      k=2      k=5      k=11     k=23     k=43   
+--------------------------------------------------------------------------
+      none  0.141, 0.219      0.609    0.156    0.089    0.062    0.036  
+ geometric  0.289, 0.266      0.815    0.461    0.154    0.065    0.036  
+   powers2  0.422, 0.500      0.979    0.812    0.258    0.146    0.076  
+    primes  0.523, 0.539      0.977    0.924    0.612    0.188    0.086  
+
+1634s
+READ
+  P1 any clock > none, else the recurrence already has distance and this is moot.
+  P2 primes >= geometric > powers2 at the LONGEST distances (lcm bounds range).
+  P3 all equal at the SHORTEST distance -- the control saying any effect is about
+     range and not about rotation helping in general.
+  FALSIFIED if primes and powers2 are within seed spread everywhere: lcm is not the
+     operative quantity and frequency choice is a tuned knob, not a number-theory one.

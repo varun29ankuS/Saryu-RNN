@@ -38,6 +38,15 @@ anywhere.
    giving tr/dh = 0.750 and landing in the working band. That was the small TEST model (d=128).
    The real checkpoint is dh=93 and lands in the failing band.
 
+   *** RETRACTED 2026-09-21 -- see results/width_scaling.txt. The design rule below was tested
+   *** directly, by scaling width with nh pinned at 2, and is FALSE. At d=512, dh=64, nh=2, i.e.
+   *** tr/dh = 0.938 and inside the band this file calls failing, the model still solves the S_3
+   *** word problem at 1.000 on both seeds. The only residue is convergence speed: 500 steps
+   *** instead of 250. nh does NOT have to scale with dh, larger models do NOT get monotonically
+   *** worse, and the concern about the 25M checkpoint at 0.957 is unfounded for state tracking.
+   *** The bands came from composition.txt, a CONSTRUCTION, and this is the sixth time in this
+   *** project that a construction has failed to predict a trained outcome.
+
    DESIGN RULE, and it runs against normal practice: dh grows with model width while nh stays
    pinned at 2, so LARGER MODELS GET MONOTONICALLY WORSE at directed relation. The quantity to
    hold fixed is the RATIO nh/dh. Every nh sweep in this project varied nh with dh held constant

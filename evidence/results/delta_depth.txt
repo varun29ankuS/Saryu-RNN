@@ -1,0 +1,15 @@
+matrix cell vs DEPTH, 4 pairs, 1024 state floats, lr 3e-3, 3000 steps
+logged 1-layer result: 0.133, 0.148, 0.164   |  published DeltaNet on MQAR: ~0.98
+
+  L=1 seed 0  params 101,027  best 0.195
+  L=1 seed 1  params 101,027  best 0.164
+  ==> L=1 mean 0.180
+
+  L=2 seed 0  params 184,836  best 1.000
+  L=2 seed 1  params 184,836  best 1.000
+  ==> L=2 mean 1.000
+
+  L=3 seed 0  params 268,645  best 1.000
+  L=3 seed 1  params 268,645  best 0.984
+  ==> L=3 mean 0.992
+

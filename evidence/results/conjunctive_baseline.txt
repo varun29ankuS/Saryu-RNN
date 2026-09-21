@@ -1,0 +1,46 @@
+CONJUNCTIVE BASELINE  matched transformer, d=128 L=2 heads=4, 3000 steps, 2 seeds, chance 0.333
+Saryu on these tasks: both 0.422/0.438 (mem off) 0.391/0.398 (mem on),
+                      recall 1.000, track 1.000
+
+  both      288,057 params   0.477, 0.398
+  recall    288,057 params   1.000, 1.000
+  track     288,057 params   0.562, 0.859
+
+583s
+READ: transformer solves "both" -> the conjunction is learnable and the failure is ours.
+      transformer also near chance -> the task is not learnable at this budget and
+      conjunctive.py measures nothing about composition.
+
+READ
+
+1. THE FALSIFIER FIRED. THE CONJUNCTIVE TASK IS NOT LEARNABLE HERE BY ANYTHING.
+   transformer  0.477, 0.398      Saryu  0.422/0.438 (mem off), 0.391/0.398 (mem on)
+   chance 0.333. The transformer is no better than Saryu, so "the architecture cannot compose" is
+   NOT what conjunctive.py showed -- the task is simply unlearned at this size and budget, and its
+   ablations measure nothing. Composition stays untested. The task needs redesigning: its storage
+   half was trivial (recall-only is solved at 1.000 with no memory at all), so whatever makes the
+   conjunction hard is not the conjunction it was built to test.
+
+2. THE RESULT THAT WAS NOT BEING LOOKED FOR, and it is the mirror of the morning's.
+   On the S_3 word problem -- pure non-commutative state tracking:
+
+       Saryu memory=False   1.000, 1.000    384,905 params
+       Saryu memory=True    1.000, 1.000    521,913 params
+       transformer          0.562, 0.859    288,057 params
+
+   SARYU BEATS THE TRANSFORMER, on the same harness, same task, same budget. The harness is
+   internally controlled: that same transformer scores 1.000 on the recall variant, so it is not
+   broken, it is worse at tracking.
+
+   This is the first transformer comparison in this project that Saryu wins, and it is the exact
+   mirror of baseline_transformer.txt, where the transformer solved 4-pair recall at 1.000 while
+   this recurrence sat at 0.32. Each architecture fails at what the other is for. That is the
+   theoretical picture -- attention is TC^0 and provably limited on NC^1-complete state tracking,
+   a non-commutative recurrence is not -- and it is the standing empirical argument for hybrids.
+
+   CAVEAT, and it must travel with the number: Saryu carries 1.34x the parameters (384,905 against
+   288,057) and the transformer was not tuned beyond the one learning rate that solves recall in
+   this harness. The gap is large and the comparison is not parameter-matched. A matched, tuned
+   version should be run before this is quoted anywhere.
+
+Every number above is logged under runs/cbase-* and runs/conj-*.

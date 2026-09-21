@@ -1,0 +1,25 @@
+GATE RETENTION  1 pair, d=128 H=8 dh=16 nh=2, 3 seeds, chance 0.016
+question: is the gap-64 wall the gate failing to hold, rather than a capacity limit?
+nh_sweep_shortgap measured 1 pair at gap 0 -> 1.000 and at gap 64 -> 0.012
+
+E gap64 L4 1500 +lb recall 0.756   solved 3/4
+                    seed 0: recall 1.000   max 1/g  L0:20  L1:6  L2:1724  L3:1826   overall 1826 tok
+                    seed 1: recall 1.000   max 1/g  L0:16  L1:9  L2:2543  L3:3477   overall 3477 tok
+                    seed 2: recall 1.000   max 1/g  L0:18  L1:18  L2:4  L3:1306   overall 1306 tok
+                    seed 3: recall 0.023   max 1/g  L0:8  L1:19  L2:35  L3:14   overall 35 tok
+
+3073s
+
+READ, against the registered predictions
+Traceback (most recent call last):
+  File "<repo>/evidence\gate_retention.py", line 224, in <module>
+    print(f'  {r[0]}: solved {solved}/{SEEDS}, retention per seed '
+^^
+  File "<repo>/evidence\gate_retention.py", line 208, in main
+    b = next((r for r in rows if r[0].startswith('B')), None)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+StopIteration
+te_retention.py", line 208, in main
+    b = next(r for r in rows if r[0].startswith('B'))
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+StopIteration

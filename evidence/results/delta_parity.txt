@@ -1,0 +1,15 @@
+PARITY SWEEP  faithful DeltaNet, 4 pairs, H=4 dk=16 (1024 state floats), 4000 steps, 2 seeds
+old cell_shootout DeltaCell (logged): 0.133 0.148 0.164   transformer (logged): 1.000
+
+      lr   L   beta  best per seed        mean
+----------------------------------------------------
+   1e-03   2  (0,2)  1.000, 0.992   0.996
+   1e-03   2  (0,1)  1.000, 1.000   1.000
+   3e-03   2  (0,2)  0.969, 1.000   0.984
+   3e-03   2  (0,1)  1.000, 0.945   0.973
+   1e-02   2  (0,2)  0.219, 0.094   0.156
+   1e-02   2  (0,1)  0.805, 0.727   0.766
+
+3942s
+BEST: lr=1e-03 L=2 beta=(0,1) -> 1.000
+PARITY reached

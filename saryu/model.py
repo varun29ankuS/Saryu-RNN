@@ -95,7 +95,18 @@ def chunkwise(h0, u, beta, a, b, C=CHUNK):
 
 
 def sequential_nl(h0, u, beta, a, b, kind='tanh', k=None):
-    """h_t = phi(a_t T_t h_{t-1} + b_t) -- NONLINEAR in the state, so no parallel scan exists.
+    """h_t = phi(a_t T_t h_{t-1} + b_t) -- NONLINEAR in the state, so no DIRECT parallel scan exists.
+
+    CORRECTED 2026-09-20. This docstring used to say flatly that no parallel scan exists, and that
+    was the stated reason this path was treated as a dead end. It is false as an impossibility
+    claim. Apple's ParaRNN (ICLR 2026 Oral, code at github.com/apple/ml-pararnn) trains nonlinear
+    RNNs in parallel over sequence length by writing the whole sequence as one nonlinear system and
+    applying NEWTON'S METHOD: each iteration linearises the recurrence through its Jacobians, and
+    the linearised system has exactly the form of a linear SSM, so an ordinary parallel scan
+    applies. It converges in about three iterations, for a reported 665x over sequential, and at 7B
+    their ParaLSTM and ParaGRU reach perplexity 9.16 and 9.19 against a transformer's 9.55
+    (Mamba2 8.62). So the 3.0x / 5.4x training cost quoted below is the cost of OUR
+    implementation, not a property of nonlinear recurrence.
 
     Why this is the one structural change worth a separate path. Unrolling the linear recurrence
     gives h_T = sum_t (prod_{s>t} A_s) B_t x_t, so the state is always a LINEAR FUNCTIONAL of the
@@ -159,7 +170,8 @@ class SaryuV3Block(nn.Module):
                  freeze_gate_bias=False, gate_ceiling=False, chunk=CHUNK,
                  carve=None, bind_write=False, sig2=False, sig2_anti=False,
                  gate_cap=0.90, write_topk=None, state_nl=None, state_topk=None,
-                 orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False):
+                 orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False,
+                 memory=False, mem_dk=None, mem_neg_eig=False, mem_chunk=None):
         """timescales / write_scale are OFF by default: the defaults are the trained configuration,
         so the released checkpoints load and reproduce exactly. They address the measured limit that
         the trained models stop using context at about 512 characters
@@ -244,6 +256,50 @@ class SaryuV3Block(nn.Module):
         # by contraction r_t = A_t q_t. Chen's identity makes signature accumulation associative,
         # so this keeps an exact chunk-parallel form; the quadratic form used in forward() is
         # mathematically identical and is simply faster at the lengths we test.
+        # MATRIX MEMORY. A parallel path alongside the transport, wired exactly like the level-2
+        # term below: its own projections, its own output matrix, zero-initialised so that turning
+        # it on is a no-op at step 0 and the existing level-1 path is untouched.
+        #
+        # WHY BESIDE THE TRANSPORT AND NOT INSTEAD OF IT. Unrolling the recurrence gives
+        #     h_T = a_T T_T [ sum_t M_{t->T-1} b_t ] + b_T
+        # so the query's transport is a COMMON FACTOR over everything stored: it reorients all the
+        # items together and cannot select one out of a sum. That is a statement about the READ.
+        # The transport itself is what this project's group-theoretic results are about and state
+        # tracking never had a problem with it, so it stays and the memory is added beside it.
+        #
+        # THE MEMORY IS THE VERIFIED DESIGN, NOT A NEW ONE. Component for component this is
+        # evidence/delta_reference.py, matched against fla/layers/delta_net.py, which solves
+        # 4-pair MQAR at 1.000 on three seeds (runs/dref-*). An earlier cell in this repo omitted
+        # five of those components and scored 0.164, and the results file built on it is retracted
+        # -- evidence/CLAIMS.md #25 and #26. Nothing is taken from experimental/memory/, whose
+        # design choices rest on constructions; this project's own standing conclusion is that
+        # constructions here verify mathematics and do not predict trainability.
+        self.memory = memory
+        if memory:
+            self.mem_dk = mem_dk or self.dh
+            inner = self.H * self.mem_dk
+            self.mk_proj = nn.Linear(d, inner, bias=False)
+            self.mv_proj = nn.Linear(d, inner, bias=False)
+            self.mq_proj = nn.Linear(d, inner, bias=False)
+            self.mk_conv = nn.Conv1d(inner, inner, 4, groups=inner, padding=3)
+            self.mv_conv = nn.Conv1d(inner, inner, 4, groups=inner, padding=3)
+            self.mq_conv = nn.Conv1d(inner, inner, 4, groups=inner, padding=3)
+            self.mb_proj = nn.Linear(d, self.H)
+            self.mnorm = RMSNorm(self.mem_dk)
+            self.m_out = nn.Linear(inner, d, bias=False)
+            nn.init.zeros_(self.m_out.weight)     # no-op at init, as r_out is below
+            self.mem_neg_eig = mem_neg_eig
+            # A SEPARATE CHUNK IS AVAILABLE AND BUYS NOTHING MEASURED. The reasoning for adding
+            # it was that this kernel's per-chunk cost is a C x C triangular solve, growing
+            # quadratically where the level-1 kernel's does not, so the two should want different
+            # sizes. Swept over chunk x mem_chunk in {16,32} x {8,16,32}, the optimum is at the
+            # SAME value both times -- 16/16 at L=128 (190 ms) and 32/32 at L=512 (898 ms). The
+            # knob is kept because it costs nothing and larger models may separate, but no
+            # measurement here supports setting it apart, and the reasoning that motivated it did
+            # not survive being tested. Adding the memory does move the shared optimum down from
+            # the level-1-only figure of 32-64 (results/kernel_profile.txt) to 16-32.
+            self.mem_chunk = mem_chunk or chunk
+
         self.sig2, self.sig2_anti = sig2, sig2_anti
         if sig2:
             self.k_proj = nn.Linear(d, d, bias=False)
@@ -279,7 +335,7 @@ class SaryuV3Block(nn.Module):
         x = self.s_proj(z)
         return x + (torch.sign(x) - x).detach()
 
-    def mix(self, z, ve=None):
+    def mix(self, z, ve=None, gate_lb=None):
         """returns u [B,L,H,nh,dh], beta [B,L,H,nh], a [B,L,H], b [B,L,H,dh]"""
         B, L, _ = z.shape
         u = F.normalize(self.v_proj(z).view(B, L, self.H, self.nh, self.dh), dim=-1)
@@ -346,6 +402,21 @@ class SaryuV3Block(nn.Module):
         g = ((1.0 - torch.cos(self.g_proj(z))) / 2.0).clamp(max=self.gate_cap)
         if self.g_max is not None:
             g = torch.minimum(g, self.g_max)          # per-head ceiling: retention can only grow
+        if gate_lb is not None:
+            # HGRN-STYLE LOWER BOUND ON THE FORGET GATE, differentiable everywhere.
+            # HGRN (Qin et al., NeurIPS 2023) bounds the FORGET gate from below by a learnable,
+            # per-layer value that increases monotonically with depth, so lower layers model
+            # short-term structure and upper layers long. Our gate is a WRITE gate -- the forget
+            # gate is f = 1 - g -- so the equivalent is bounding g from ABOVE:
+            #     g <- (1 - lb) * g     =>     f = 1 - g >= lb
+            # It is MULTIPLICATIVE, so the gradient reaches g at every value of the bound. That is
+            # the whole difference from this project's three previous attempts, all of which
+            # enforced the bound by clamping: torch.minimum has ZERO gradient wherever it binds, so
+            # the constraint stops teaching the moment it applies, and training routed around it
+            # every time (gate_timescales.txt). See results/literature_gate_lower_bound.txt.
+            # The bound is PER HEAD, not per channel, because a scalar-per-head gate is what makes
+            # the exact chunk kernel possible; a per-dimension gate breaks it.
+            g = g * (1.0 - gate_lb)
         cz = self.c_proj(z)
         if ve is not None:                      # value embeds into the write
             cz = cz + ve
@@ -378,11 +449,11 @@ class SaryuV3Block(nn.Module):
         gw = g if self.w_raw is None else g * F.softplus(self.w_raw).clamp(max=4.0)
         return u, beta, 1.0 - g, gw[..., None] * c
 
-    def forward(self, x, ve=None):
+    def forward(self, x, ve=None, gate_lb=None):
         B, L, _ = x.shape
         z = self.ln(x)
         z = self.conv(z.transpose(1, 2))[:, :, :L].transpose(1, 2)
-        u, beta, a, b = self.mix(z, ve)
+        u, beta, a, b = self.mix(z, ve, gate_lb)
         # fold heads into batch for the kernel
         uf = u.permute(0, 2, 1, 3, 4).reshape(B * self.H, L, self.nh, self.dh)
         bf_ = beta.permute(0, 2, 1, 3).reshape(B * self.H, L, self.nh)
@@ -400,7 +471,91 @@ class SaryuV3Block(nn.Module):
         if self.bind_sign:
             s = s * self._sign(z)          # same map, so the binding inverts exactly
         y = self.out(s * F.silu(self.og(z)))
+        if self.memory:
+            y = y + self.m_out(self.recall(z))
         return y + self.r_out(self.level2(z)) if self.sig2 else y
+
+    def _recall_chunk(self, q, k, v, beta, chunk):
+        """Chunk-parallel delta rule. EXACT -- the same recurrence, not an approximation.
+
+        The sequential form is u_i = beta_i (v_i - S_{i-1} k_i), S_C = S_0 + sum_i u_i k_i^T.
+        Expanding S_{i-1} k_i = S_0 k_i + sum_{j<i} u_j (k_j . k_i) turns the chunk into ONE unit
+        lower-triangular system in the pseudo-values u:
+
+            (I + diag(beta) tril(K K^T, -1)) U = diag(beta) (V - K S_0^T)
+            O  = Q S_0^T + tril(Q K^T, 0) U
+            S' = S_0 + U^T K
+
+        The matrix is unit lower triangular by construction (the strict tril has zero diagonal),
+        so this is a substitution and never an inverse -- the same property the level-1 kernel
+        above relies on. Cost per chunk is O(C^2 d) instead of O(C d^2) sequential steps, and the
+        whole chunk is one batched solve.
+
+        Reference: Yang et al. 2024, Parallelizing Linear Transformers with the Delta Rule over
+        Sequence Length, arXiv 2406.06484."""
+        B, L, H, dk = k.shape
+        pad = (-L) % chunk
+        if pad:
+            q, k, v = (F.pad(x, (0, 0, 0, 0, 0, pad)) for x in (q, k, v))
+            beta = F.pad(beta, (0, 0, 0, pad))
+        N = (L + pad) // chunk
+        # [B, H, N, C, d]
+        q, k, v = (x.view(B, N, chunk, H, dk).permute(0, 3, 1, 2, 4) for x in (q, k, v))
+        bt = beta.view(B, N, chunk, H).permute(0, 3, 1, 2)                     # [B,H,N,C]
+        eye = torch.eye(chunk, device=k.device, dtype=k.dtype)
+        strict = torch.tril(torch.ones(chunk, chunk, device=k.device, dtype=k.dtype), -1)
+        incl = torch.tril(torch.ones(chunk, chunk, device=k.device, dtype=k.dtype), 0)
+        S = torch.zeros(B, H, dk, dk, device=k.device, dtype=k.dtype)
+        outs = []
+        for n in range(N):
+            kn, vn, qn, bn = k[:, :, n], v[:, :, n], q[:, :, n], bt[:, :, n]
+            A = torch.einsum('bhck,bhdk->bhcd', kn, kn) * strict
+            M = eye + bn[..., None] * A                                        # unit lower tri
+            Sk = torch.einsum('bhvk,bhck->bhcv', S, kn)
+            rhs = bn[..., None] * (vn - Sk)
+            U = torch.linalg.solve_triangular(M, rhs, upper=False, unitriangular=True)
+            QK = torch.einsum('bhck,bhdk->bhcd', qn, kn) * incl
+            outs.append(torch.einsum('bhvk,bhck->bhcv', S, qn)
+                        + torch.einsum('bhcd,bhdv->bhcv', QK, U))
+            S = S + torch.einsum('bhcv,bhck->bhvk', U, kn)
+        o = torch.stack(outs, 2).permute(0, 2, 3, 1, 4).reshape(B, N * chunk, H, dk)
+        return o[:, :L]
+
+    def _mconv(self, conv, v, L):
+        return conv(v.transpose(1, 2))[..., :L].transpose(1, 2)
+
+    def recall(self, z):
+        """S_t = S_{t-1}(I - b k k^T) + b v k^T per head; read o_t = S_t q_t.
+
+        The erase is RANK ONE and targeted: it removes only the k direction, so an item whose key
+        is orthogonal to k survives untouched. That is what separates this from the transport
+        above, which rotates the entire state on every token, and it is why this path can hold
+        several facts where the transport cannot reliably hold three.
+
+        Evaluated chunk-parallel by default and sequentially when SaryuV3Block.USE_KERNEL is
+        False, exactly as the level-1 path above. The two agree to float precision and tests/
+        checks that, so the switch is a speed choice and never a semantic one."""
+        B, L, _ = z.shape
+        H, dk = self.H, self.mem_dk
+        q = F.silu(self._mconv(self.mq_conv, self.mq_proj(z), L)).view(B, L, H, dk)
+        k = F.silu(self._mconv(self.mk_conv, self.mk_proj(z), L)).view(B, L, H, dk)
+        v = F.silu(self._mconv(self.mv_conv, self.mv_proj(z), L)).view(B, L, H, dk)
+        q, k = F.normalize(q, dim=-1), F.normalize(k, dim=-1)
+        beta = torch.sigmoid(self.mb_proj(z))                       # [B,L,H]
+        if self.mem_neg_eig:
+            beta = beta * 2.0     # the eigenvalue 1-b along k goes negative; see delta_reference
+        if SaryuV3Block.USE_KERNEL:
+            o = self._recall_chunk(q, k, v, beta, self.mem_chunk)
+        else:
+            S = torch.zeros(B, H, dk, dk, device=z.device, dtype=z.dtype)
+            outs = []
+            for t in range(L):
+                kt, vt, qt, bt = k[:, t], v[:, t], q[:, t], beta[:, t][..., None]
+                Sk = torch.einsum('bhvk,bhk->bhv', S, kt)
+                S = S + torch.einsum('bhv,bhk->bhvk', bt * (vt - Sk), kt)
+                outs.append(torch.einsum('bhvk,bhk->bhv', S, qt))
+            o = torch.stack(outs, 1)
+        return self.mnorm(o).reshape(B, L, H * dk)
 
     def level2(self, z):
         """The second iterated integral, per head: A_t = alpha A_{t-1} + p_t k_t^T, read A_t q_t.
@@ -452,7 +607,9 @@ class SaryuV3LM(nn.Module):
                  gate_w_scale=0.01, freeze_gate_bias=False, gate_ceiling=False, chunk=CHUNK,
                  nh=NH, H=NHH, carve=None, bind_write=False, sig2=False, sig2_anti=False,
                  gate_cap=0.90, write_topk=None, state_nl=None, state_topk=None,
-                 orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False):
+                 orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False,
+                 memory=False, mem_dk=None, mem_neg_eig=False, mem_chunk=None,
+                 gate_lb=False):
         """nh (reflections per head) and H default to the trained configuration, so the released
         checkpoints load unchanged. They are exposed because nh is the knob the trace law is about
         (evidence/results/trace_law.txt): overlap ~ exp(-2 nh / dh), so nh trades state tracking
@@ -472,21 +629,45 @@ class SaryuV3LM(nn.Module):
                                                bind_n=bind_n,
                                                bind_sign=bind_sign,
                                                sig2=sig2, sig2_anti=sig2_anti,
+                                               memory=memory, mem_dk=mem_dk,
+                                               mem_neg_eig=mem_neg_eig,
+                                               mem_chunk=mem_chunk,
                                                timescales=timescales, write_scale=write_scale,
                                                gate_w_scale=gate_w_scale, chunk=chunk,
                                                freeze_gate_bias=freeze_gate_bias,
                                                gate_ceiling=gate_ceiling)
                                   for _ in range(nl)])
         self.ffn = nn.ModuleList([SwiGLU(d) for _ in range(nl)])
+        # Gamma lives on the LM, not on the block, because monotonicity in depth is a property OF
+        # THE STACK: cumax has to run across layers, and a block cannot see its neighbours. Zeros
+        # at init give softmax = 1/nl per layer, so the bounds come out evenly spaced -- for nl = 4,
+        # [0, 0.25, 0.50, 0.75], i.e. layer 3's forget gate can never fall below 0.75 and its
+        # retention can never fall below 4 tokens. Training moves the spacing, never the order.
+        self.gamma = nn.Parameter(torch.zeros(nl, H)) if gate_lb else None
         self.lnf = nn.LayerNorm(d)
         self.head = nn.Linear(d, vocab)
         self.d, self.nl = d, nl
 
+    def gate_bounds(self):
+        """Per-layer, per-head lower bounds on the forget gate, monotone in depth BY CONSTRUCTION.
+
+        beta = cumax(Gamma) = cumsum(softmax(Gamma, dim=0), dim=0), then shifted so layer 0's
+        bound is exactly zero. A cumulative sum of a softmax is non-decreasing whatever Gamma
+        holds, so no gradient step can break the ordering -- the monotonicity is structural, not
+        an initialisation that training is free to undo. That is the second difference from the
+        earlier attempts here, which were monotone only at step 0.
+
+        Returns [nl, H] in [0, 1). Gamma is learnable, so the model chooses HOW far apart the
+        timescales are; it cannot choose to invert them."""
+        beta = torch.cumsum(torch.softmax(self.gamma, dim=0), dim=0)
+        return beta - beta[:1]
+
     def forward(self, idx):
         x = self.emb(idx)
         ve = self.vemb(idx) if self.vemb is not None else None
-        for m, f in zip(self.mix, self.ffn):
-            x = x + m(x, ve)
+        lb = self.gate_bounds() if self.gamma is not None else None
+        for i, (m, f) in enumerate(zip(self.mix, self.ffn)):
+            x = x + m(x, ve, None if lb is None else lb[i])
             x = x + f(x)
         return self.head(self.lnf(x))
 

@@ -1,0 +1,63 @@
+WIDTH SCALING  S_3 word problem, H=8 nl=2, 1500 steps, 2 seeds, chance 0.333
+trained_geometry item 2: "larger models get monotonically worse ... hold nh/dh fixed"
+composition.txt bands on tr/dh: <=0.750 working, 0.938 partial, 0.984 gone
+
+    d   dh   nh   tr/dh     band     params  best per seed
+------------------------------------------------------------------------
+  256   32    2   0.875  partial    1490601  1.000, 1.000
+  256   32    4   0.750  working    1760969  1.000, 1.000
+  512   64    2   0.938  FAILING    5864681  1.000, 1.000
+  512   64    8   0.750  working    9059657  1.000, 1.000
+
+2979s
+READ
+  P1 holds if the nh=2 row falls as d rises.
+  P2 holds if the ratio-fixed rows stay near 1.000 at every width.
+  P3 holds if d=512/nh=8 (tr 0.750) beats d=256/nh=2 (tr 0.875) -- the wider model
+     winning is what says the TRACE is operative and not width itself.
+  Step budget is not a confound: d=128 reaches 0.984 by step 250 and 1.000 by 500,
+  so every arm here gets at least 3x what the easy config needed.
+  FALSIFIED if nh=2 holds at d=512: the scaling rule in trained_geometry.txt is wrong
+     and "larger models get monotonically worse" has to be retracted.
+
+READ -- THE FALSIFIER FIRED. THE SCALING RULE IS WRONG AND IS RETRACTED.
+
+Every configuration reaches 1.000, including d=512 with nh=2 at tr/dh = 0.938, which is inside the
+band composition.txt measured as only partially chaining (0.716 at k=2).
+
+    d=128  nh=2  tr/dh=0.750   1.000, 1.000    first >0.95 at step 250
+    d=256  nh=2  tr/dh=0.875   1.000, 1.000    step 250
+    d=256  nh=4  tr/dh=0.750   1.000, 1.000    step 250
+    d=512  nh=2  tr/dh=0.938   1.000, 1.000    step 500
+    d=512  nh=8  tr/dh=0.750   1.000, 1.000    step 250
+
+P1 FALSE. The nh=2 arm does not degrade with width. It does not degrade at all.
+P2 true but uninformative, since every arm holds.
+P3 unmeasurable: the trace cannot be shown to be operative when nothing varies with it.
+
+The ONLY residue of the predicted effect is convergence speed: d=512/nh=2 needed 500 steps where
+every other configuration needed 250. The endpoint is identical. A 5,864,681-parameter model with
+the "wrong" ratio matches a 9,059,657-parameter model with the "right" one, on 35% fewer
+parameters.
+
+WHAT IS RETRACTED. trained_geometry.txt item 2: "dh grows with model width while nh stays pinned at
+2, so LARGER MODELS GET MONOTONICALLY WORSE at directed relation. The quantity to hold fixed is the
+RATIO nh/dh." Not true for trained models on this task up to d=512. nh does not have to scale with
+dh, and the concern that the shipped 25M checkpoint sits at tr/dh = 0.957 in a failing band is
+unfounded for state tracking.
+
+CONSEQUENCE FOR SCALING. There is now no known ARCHITECTURAL obstacle to making this model wider.
+The remaining obstacle is compute, which is the honest answer to "why are we at 2-4 layers".
+
+AND THE SIXTH CONSTRUCTION TO FAIL AGAINST TRAINING. The bands used here came from
+composition.txt, which measured them by construction. The list is now: the nh ladder, the key-bound
+write, sign binding, wide-vector-beats-matrix, the orbit account, and this. matrix_decision.txt
+already records that "constructions here verify the mathematics and have NO demonstrated predictive
+value for what gradient descent finds". At six for six that is no longer an observation about a few
+cases; it is a rule. A construction in this repository is a check on the algebra and nothing more,
+and should never again be used to predict a trained outcome or to set a design rule.
+
+SCOPE. One task (S_3 word problem, 6 generators), nl=2, widths to d=512, two seeds. It says nothing
+about recall, about language, or about depth.
+
+Every number is logged under runs/ws-*.

@@ -1,0 +1,61 @@
+CONJUNCTIVE  6 generators, d=128 H=8 L=2, 3000 steps, 2 seeds
+MQAR reference (state_volume_gap4): transport ablation cost 0.02 where memory cost 0.84
+task                                mem  chance  recall per seed
+--------------------------------------------------------------------------
+both    (store 3 + track S_3)      False   0.333  0.422, 0.438
+both    (store 3 + track S_3)      True   0.333  0.391, 0.398
+recall  (store 3, no generators)   False   0.333  1.000, 1.000
+recall  (store 3, no generators)   True   0.333  1.000, 1.000
+track   (fixed values, S_3 only)   False   0.333  1.000, 1.000
+track   (fixed values, S_3 only)   True   0.333  1.000, 1.000
+
+ABLATION AT THE QUERY POSITION  (the complementarity test)
+task                                  full  -memory  -transport   transport cost
+both    (store 3 + track S_3)        0.340    0.340       0.320   +0.020
+both    (store 3 + track S_3)        0.305    0.359       0.277   +0.027
+recall  (store 3, no generators)     1.000    0.828       1.000   +0.000
+recall  (store 3, no generators)     1.000    0.828       0.969   +0.031
+track   (fixed values, S_3 only)     1.000    1.000       0.348   +0.652
+track   (fixed values, S_3 only)     1.000    1.000       0.348   +0.652
+
+3417s
+READ
+  P2 holds if the transport ablation costs substantially more on "both" than the 0.02
+     it cost on MQAR, AND stays cheap on "recall" (P3, the control).
+  P2 FALSIFIED if it stays near zero on "both" while accuracy is high -- then the
+     memory is doing the tracking too and the two paths are not dividing labour.
+
+READ -- A DOUBLE DISSOCIATION, AND A CONJUNCTION THAT IS NOT YET INTERPRETABLE
+
+WHAT IS ESTABLISHED, and it is the strongest form of evidence for the design principle.
+Ablating one path AT THE QUERY POSITION on the two single-axis tasks:
+
+    track-only (S_3)    kill transport: 1.000 -> 0.348 (chance 0.333)   kill memory: 1.000 -> 1.000
+    recall-only         kill transport: 1.000 -> 1.000/0.969            kill memory: 1.000 -> 0.828
+    MQAR (state_volume) kill transport: 0.926 -> 0.906                  kill memory: 0.926 -> 0.086
+
+Each path is causally NECESSARY for exactly the capability it was designed for and causally
+IRRELEVANT for the other. The transport carries state tracking and contributes nothing to recall;
+the memory carries recall and contributes nothing to tracking. That is a double dissociation, and
+it is what "a recurrence that conflates tracking with storage gets neither" predicts.
+
+WHAT IS NOT ESTABLISHED. Composition. The conjunctive task sits at 0.39-0.44 against chance 0.333
+with or without the memory, so its ablations measure nothing -- you cannot ablate a capability the
+model never acquired. P1 is falsified as stated (memory=True does not beat memory=False; it is
+marginally worse), but the falsification is uninformative while the task is unlearned.
+
+TWO DESIGN ERRORS IN THIS EXPERIMENT, recorded because they bound what it can show.
+
+  1. THE STORAGE HALF IS TRIVIAL. recall-only scores 1.000 with NO memory. Three explicitly marked
+     slots, no distractors and no gap is not a storage challenge -- nothing like MQAR, where four
+     pairs among distractors was impossible. So "both" is not storage x tracking; it is tracking
+     plus an easy lookup, and whatever makes it hard is not the conjunction I intended to build.
+  2. NO BASELINE. Whether "both" is learnable AT ALL at this size is unknown. "The architecture
+     cannot compose" and "the task is too hard for anything here" are indistinguishable from this
+     table. That is precisely the hole that produced the retracted matrix decision: 170 runs at
+     0.32 meant nothing until a transformer scored 1.000 and located the wall.
+
+  conjunctive_baseline.py runs the matched transformer. Until it reports, nothing about composition
+  should be claimed in either direction.
+
+Every number above is logged under runs/conj-*.

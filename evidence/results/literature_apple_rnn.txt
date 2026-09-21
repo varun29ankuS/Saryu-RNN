@@ -1,0 +1,62 @@
+APPLE IS BETTING ON RNNs, AND I CONCLUDED THE OPPOSITE FROM THE WRONG SOURCE
+Checked 2026-09-20.
+
+WHAT I CLAIMED, AND IT WAS WRONG. Reading Apple's neural-processor patents, I wrote: "Apple's ML
+silicon IP shows no meaningful bet on recurrence... If they believed recurrent architectures were
+the answer to the memory wall, the portfolio would look different. It doesn't. That's evidence
+against the direction being where the large players are heading."
+
+THE METHOD WAS THE ERROR, and the user named it: patents lag practice by two to four years -- the
+streaming-convolution filing I reasoned from has priority May 2022, before ChatGPT -- so a
+portfolio describes what mattered when it was filed. Papers are current. Ask the papers.
+
+WHAT THE PAPERS SAY
+
+  ParaRNN: Unlocking Parallel Training of Nonlinear RNNs for Large Language Models.
+  Apple. ICLR 2026, ORAL. Code released: github.com/apple/ml-pararnn
+
+  Apple's own framing: "RNNs are naturally suited to efficient inference, requiring far less memory
+  and compute than attention-based architectures, but their sequential nature has historically made
+  it impractical to scale up RNNs to billions of parameters."
+
+  THE METHOD. Write the whole sequence as one nonlinear system of equations and apply NEWTON'S
+  METHOD. Each iteration linearises the recurrence through its Jacobians, and -- this is the part
+  that matters -- "the linearized RNN system has exactly the same form as a linear SSM, with the
+  Jacobians playing the role of the state matrices", so an ordinary parallel scan applies.
+  Converges in about THREE iterations. 665x over the sequential baseline.
+
+  RESULTS at 7B parameters:
+      Mamba2       8.62
+      ParaLSTM     9.16
+      ParaGRU      9.19
+      Transformer  9.55
+
+  A plain LSTM, scaled with a training method that did not exist, beats a transformer on
+  perplexity. Linear SSMs still win it.
+
+WHAT THIS CORRECTS IN OUR OWN CODE. saryu/model.py's sequential_nl said "NONLINEAR in the state, so
+no parallel scan exists", and that sentence was the stated reason the nonlinear-state path was
+treated as a dead end. It is false as an impossibility claim: no DIRECT scan exists, and Newton
+linearisation supplies one anyway. The 3.0x/5.4x training cost recorded there is the cost of our
+implementation, not a property of nonlinear recurrence. Docstring corrected.
+
+WHAT IT DOES NOT SAY, kept separate from the good news:
+  - Perplexity is not recall. Everything this project spent the day on -- associative recall, the
+    read, capacity -- is invisible in a perplexity table, and linear models lose specifically there
+    (Zoology, Based, and our own MQAR results).
+  - Mamba2 still beats both ParaRNN variants, so this is evidence that nonlinear RNNs are
+    COMPETITIVE, not that they are the answer.
+  - One paper from a research arm is not a company's product bet. The silicon still says vision and
+    memory bandwidth.
+
+WHAT IS WORTH DOING WITH IT
+  ParaRNN is a TRAINING method and is orthogonal to the read/memory question settled today. It
+  would apply to Saryu's nonlinear path if that path is ever wanted, and the code is public. Note
+  the shape of the trick is one this project should recognise: linearise, scan, iterate. Our own
+  chunk kernels are exact because the recurrence is linear in the state; Newton buys the same
+  parallelism for a nonlinear one at the price of a few iterations.
+
+SOURCES
+  ParaRNN: Large-Scale Nonlinear RNNs, Trainable in Parallel.
+    machinelearning.apple.com/research/large-scale-rnns   ICLR 2026 Oral
+  github.com/apple/ml-pararnn

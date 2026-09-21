@@ -1,0 +1,58 @@
+VOID -- NOT NEGATIVE. NOTHING LEARNED, SO NOTHING WAS TESTED.
+================================================================================
+Chance on this task is 0.250. Both arms scored 0.031-0.059, i.e. BELOW chance, so
+neither model learned it at gap 24 in 2000 steps. Ablating the memory then removes
+something that was carrying nothing, and the gate-retention comparison is between
+two models that never trained. P1 and P2 cannot be evaluated from this run and
+must not be read off the table below.
+
+Recorded rather than deleted, because the same mistake -- reading an ablation on a
+model that never learned -- is how a void test becomes a false negative. The
+flip-flop experiment in this project is on record for exactly this.
+
+ONE THING WORTH TESTING PROPERLY, stated as a hypothesis and not a finding. At gap
+4 the memory takes this task from 0.281 to 0.977 (memory_on.txt). At gap 24 it
+gives 0.039 against 0.031 -- nothing. If that survives a proper budget it would
+mean the matrix fixes CAPACITY and not RETENTION, which are the two failure modes
+nh_sweep_shortgap separated. But 2000 steps at sequence length 34 is a confound
+against 3000 steps at length 14, so this run cannot distinguish "the memory does
+not fix retention" from "not enough steps". Rerun at gap 4 first, where the task
+is known learnable, so the ablation has something to ablate.
+================================================================================
+
+STATE VOLUME  4 pairs, gap 24, sequence length 34, d=128 H=8 L=2, 2000 steps, 2 seeds
+memory_on.txt (gap 4, 3000 steps): off 0.234/0.281, on 0.875/0.977
+
+  memory=False recall 0.031, 0.039
+  memory=True  recall 0.039, 0.055
+
+1. CAUSAL ABLATION at the query position -- where is the answer actually stored?
+   memory=False seed 0: full=0.027  transport=0.020
+   memory=False seed 1: full=0.012  transport=0.012
+   memory=True  seed 0: full=0.043  memory=0.023  transport=0.039   ablating memory costs +0.020
+   memory=True  seed 1: full=0.059  memory=0.016  transport=0.059   ablating memory costs +0.043
+
+2. GATE RETENTION 1/g per layer, mean over heads  (the transport's tube length)
+   memory=False layer 0: mean 5429.0, 3437.1   max 10868.5, 9327.7
+   memory=False layer 1: mean 3.9, 29.3   max 8.6, 209.5
+   memory=True  layer 0: mean 1000.8, 944.2   max 3978.2, 3451.8
+   memory=True  layer 1: mean 1354.1, 1919.0   max 4360.2, 11800.4
+
+3/4. AUTOCORRELATION vs lag   cos(x_t, x_t+D), mean over t and heads
+                        path  D=1     D=2     D=4     D=8     D=16    D=24  
+  transport L0, memory=False  +0.803  +0.717  +0.601  +0.489  +0.414  +0.360
+  transport L1, memory=False  +0.989  +0.981  +0.970  +0.958  +0.934  +0.881
+   transport L0, memory=True  +0.886  +0.869  +0.819  +0.780  +0.745  +0.708
+   transport L1, memory=True  +0.982  +0.976  +0.950  +0.912  +0.847  +0.733
+              MEMORY read L0  +0.866  +0.838  +0.795  +0.734  +0.629  +0.499
+              MEMORY read L1  +0.983  +0.974  +0.962  +0.949  +0.920  +0.858
+
+1204s
+READ
+  P1 holds if ablating the memory at the query position collapses accuracy while
+     ablating the transport there costs less. Smoothness cannot pass that.
+  P1 FALSIFIED if accuracy survives the memory ablation -- then the fact is not in the
+     matrix and the mechanism in model.py is wrong however good the score looks.
+  P2 holds if gate retention moves when the memory is switched on.
+  The autocorrelation table is DESCRIPTION, not a test: the memory is an accumulator
+  and is autocorrelated by construction, so it would pass holding nothing.

@@ -1,0 +1,65 @@
+THE KV-CACHE ARGUMENT IS MUCH WEAKER THAN THIS REPO IMPLIES
+Checked 2026-09-21, from DeepSeek-V4.1-Flash (arXiv 2609.19969, 17 Sep 2026) and
+Memory Caching (Behrouz et al., Google, arXiv 2602.24281, 27 Feb 2026).
+
+WHAT THIS REPO HAS BEEN ARGUING. That a fixed-size state is the durable advantage because a KV
+cache grows without bound: for a 25M model at 1M tokens, 5,952,000,000 floats of cache against
+11,904 floats of state, and the cache is the one component that cannot live in an in-memory-compute
+array because it changes every token.
+
+WHAT DEEPSEEK-V4.1-FLASH ACTUALLY ACHIEVES
+  890 BYTES PER TOKEN of global KV cache. The progression across their own generations:
+      DeepSeek-V1      389,120 bytes/token
+      DeepSeek-V3.2     48,068
+      DeepSeek-V4-Flash  3,514
+      DeepSeek-V4.1-Flash  890          -- 437x smaller than V1
+  And, more important than the footprint: single-token DECODE FLOPS ARE NEARLY CONSTANT IN CONTEXT.
+  Extending context 256-fold, from 4K to 1M, raises decode FLOPs by about one quarter.
+
+  By: Causal Encoder-Decoder (8B params active at prefill, 16B at decode, 552B backbone),
+  Compressed Sparse Attention 2 with cross-layer KV and index reuse, FP4 KV caching, and SWA
+  Bounded Replay.
+
+SO THE ARGUMENT AS THIS REPO STATES IT IS OUT OF DATE. The 23.8 GB figure quoted in conversation
+assumed an UNCOMPRESSED cache. At 890 bytes/token the same million tokens is ~890 MB, and decode
+compute barely moves. The unbounded-cache problem is being engineered away, fast, by teams with
+very large resources.
+
+WHAT SURVIVES, AND IT IS NARROWER
+  - Their cache still grows LINEARLY. Ours does not grow at all. At 1M tokens that is ~890 MB
+    against tens of kilobytes.
+  - But 890 MB is unremarkable in a datacentre and impossible on a phone. The ON-DEVICE argument
+    survives; the datacentre argument largely does not.
+  - Their route costs a 552B MoE, custom kernels, FP4 training and a bespoke inference system. That
+    is an argument for a simpler answer existing, not evidence that ours is it.
+  - Note for the efficiency goal: their base model matches DeepSeek-V4-Pro-Base on 1/3 the total
+    parameters and 1/4 the activated parameters, with 5-10% better held-out results. That is
+    parameter efficiency achieved by MoE and data quality, NOT by recurrence.
+
+WHAT IT CONFIRMS. CED, cross-layer reuse, sliding windows, bounded replay -- every one of these is
+effort spent making attention behave like a BOUNDED-STATE system. Together with the streaming
+convolution work in Apple's neural-processor filings, the field is paying a great deal to
+approximate what a recurrence has natively. That is evidence the PROPERTY is valuable. It is not
+evidence that anyone needs our route to obtain it.
+
+AND THE OTHER DIRECTION, from Memory Caching. The field's answer to "fixed state limits recall" is
+to stop having a fixed state: cache checkpoints of the memory every segment and read from all of
+them, giving O(NL) between the RNN's O(L) and attention's O(L^2). Their own result is honest --
+"Transformers achieve the best accuracy, our MC variants ... close the gap".
+
+  A TRAP IN IT THAT IS DIRECTLY BINDING ON US. From their section 3.1: when the memory module is
+  strictly linear, i.e. a matrix, residual memory caching "mathematically collapses into a standard
+  fixed-size memory, as the cached memories can be pre-summed". Saryu's matrix memory IS strictly
+  linear. Naive caching on it would train, look implemented, and be algebraically identical to what
+  we already have. The escape needs input-dependent gating or a nonlinear memory.
+
+ACTION REQUIRED IN THIS REPO
+  README.md and docs/learning_machine.md both lean on constant-cost inference without
+  acknowledging how far cache compression has come. They should say 890 bytes per token and
+  near-constant decode FLOPs, and should confine the advantage to the on-device regime where it
+  actually holds.
+
+SOURCES
+  DeepSeek-AI. DeepSeek-V4.1-Flash: Pushing the Limits of KV Cache Compression. arXiv 2609.19969
+  Behrouz, Li, Deng, Zhong, Razaviyayn, Mirrokni. Memory Caching: RNNs with Growing Memory.
+    arXiv 2602.24281

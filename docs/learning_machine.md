@@ -111,6 +111,14 @@ parameters, the efficiency claim for this architecture is dead as stated, and th
 rests on the group-theoretic results and the constant-cost inference alone — not on learning more
 from less.
 
+And that fallback is weaker than it was. DeepSeek-V4.1-Flash reports 890 bytes per token of KV
+cache and near-constant decode FLOPs out to a million tokens, so "constant-cost inference" is no
+longer a property only a recurrence can offer — it is being engineered into attention, hard, by
+teams with very large resources. What a fixed state still has is that it does not grow *at all*,
+which matters where memory is bounded and nowhere else. If the efficiency claim falls too, what is
+left is the group-theoretic work and an on-device argument
+([`evidence/results/literature_kv_compression.txt`](../evidence/results/literature_kv_compression.txt)).
+
 ---
 
 ## Related

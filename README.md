@@ -114,6 +114,17 @@ recurrent state does not grow, so generation cost and memory per token are const
 recurrent design has to answer is what that fixed state can represent; the choices below are that
 answer.
 
+*How much that is worth, stated honestly.* KV-cache compression has moved a long way. DeepSeek-V4.1
+-Flash reports 890 bytes per token of global cache — 437× below DeepSeek-V1 — and single-token
+decode FLOPs that rise by only about a quarter when context is extended 256-fold from 4K to 1M. So
+the gap is not the four orders of magnitude a naive uncompressed-cache calculation suggests. What
+remains is a difference in kind rather than degree: their footprint still grows linearly with
+context and ours does not grow at all. At a million tokens that is a few hundred megabytes against
+a few tens of kilobytes — unremarkable in a datacentre, impossible on a phone. This project's
+efficiency case therefore rests on the on-device and memory-constrained regime, and not on the
+claim that long-context serving is otherwise unaffordable
+([`results/literature_kv_compression.txt`](evidence/results/literature_kv_compression.txt)).
+
 **Reflections, not a diagonal recurrence.** Diagonal (element-wise) transitions commute, so a pure
 diagonal transport ends in the same state for every ordering of the same tokens. It can only
 compute functions of the *multiset* of inputs. On the word problem of S₃ that caps accuracy at a
