@@ -36,6 +36,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 NH, NHH = 2, 8      # n_h reflections per head, number of heads
+ALPHA_FLOOR = math.exp(-1.0)   # ~0.368; floor on the memory decay, see _recall_chunk
 CHUNK = 8           # chunk length of the parallel kernel
 
 
@@ -171,7 +172,8 @@ class SaryuV3Block(nn.Module):
                  carve=None, bind_write=False, sig2=False, sig2_anti=False,
                  gate_cap=0.90, write_topk=None, state_nl=None, state_topk=None,
                  orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False,
-                 memory=False, mem_dk=None, mem_neg_eig=False, mem_chunk=None):
+                 memory=False, mem_dk=None, mem_neg_eig=False, mem_chunk=None,
+                 mem_decay=False, mem_decouple=False, mem_decay_channel=False):
         """timescales / write_scale are OFF by default: the defaults are the trained configuration,
         so the released checkpoints load and reproduce exactly. They address the measured limit that
         the trained models stop using context at about 512 characters
@@ -285,10 +287,29 @@ class SaryuV3Block(nn.Module):
             self.mv_conv = nn.Conv1d(inner, inner, 4, groups=inner, padding=3)
             self.mq_conv = nn.Conv1d(inner, inner, 4, groups=inner, padding=3)
             self.mb_proj = nn.Linear(d, self.H)
+            # DECAY. Our memory was plain DeltaNet -- S <- S + b(v - Sk)k^T, with no forget term at
+            # all. GATED DeltaNet is S <- a*S(I - b k k^T) + b v k^T, and that gating is what the
+            # whole family is named for. Initialised at sigmoid(4.0) ~ 0.982, a retention of about
+            # 55 steps, so switching it on does not begin by erasing the memory.
+            # CHANNEL-WISE DECAY gives every key dimension its own forgetting rate, which is
+            # what KDA (Kimi Linear, arXiv 2510.26692) adds over Gated DeltaNet's head-wise
+            # scalar, and what GLA adds over Mamba2's. The field went scalar -> vector ->
+            # diagonal; a head-wise gate is the coarsest rung.
+            mout = self.H * (self.mem_dk if mem_decay_channel else 1)
+            self.ma_proj = nn.Linear(d, mout) if mem_decay else None
+            if mem_decay:
+                nn.init.zeros_(self.ma_proj.weight)
+                nn.init.constant_(self.ma_proj.bias, 4.0)
+            # DECOUPLED ERASE AND WRITE, after Gated DeltaNet-2 (arXiv 2605.22791 -- already in
+            # refs.bib and never used). A single beta controls both how much of the old value is
+            # erased and how much of the new one is written; there is no reason those are tied.
+            self.mbw_proj = nn.Linear(d, self.H) if mem_decouple else None
             self.mnorm = RMSNorm(self.mem_dk)
             self.m_out = nn.Linear(inner, d, bias=False)
             nn.init.zeros_(self.m_out.weight)     # no-op at init, as r_out is below
             self.mem_neg_eig = mem_neg_eig
+            self.mem_decay, self.mem_decouple = mem_decay, mem_decouple
+            self.mem_decay_channel = mem_decay_channel
             # A SEPARATE CHUNK IS AVAILABLE AND BUYS NOTHING MEASURED. The reasoning for adding
             # it was that this kernel's per-chunk cost is a C x C triangular solve, growing
             # quadratically where the level-1 kernel's does not, so the two should want different
@@ -475,7 +496,7 @@ class SaryuV3Block(nn.Module):
             y = y + self.m_out(self.recall(z))
         return y + self.r_out(self.level2(z)) if self.sig2 else y
 
-    def _recall_chunk(self, q, k, v, beta, chunk):
+    def _recall_chunk(self, q, k, v, beta, betaw, alpha, chunk):
         """Chunk-parallel delta rule. EXACT -- the same recurrence, not an approximation.
 
         The sequential form is u_i = beta_i (v_i - S_{i-1} k_i), S_C = S_0 + sum_i u_i k_i^T.
@@ -498,10 +519,22 @@ class SaryuV3Block(nn.Module):
         if pad:
             q, k, v = (F.pad(x, (0, 0, 0, 0, 0, pad)) for x in (q, k, v))
             beta = F.pad(beta, (0, 0, 0, pad))
+            betaw = F.pad(betaw, (0, 0, 0, pad))
+            alpha = F.pad(alpha, (0, 0, 0, 0, 0, pad), value=1.0)   # [B,L,H,dk]
         N = (L + pad) // chunk
         # [B, H, N, C, d]
         q, k, v = (x.view(B, N, chunk, H, dk).permute(0, 3, 1, 2, 4) for x in (q, k, v))
         bt = beta.view(B, N, chunk, H).permute(0, 3, 1, 2)                     # [B,H,N,C]
+        bw = betaw.view(B, N, chunk, H).permute(0, 3, 1, 2)
+        # Cumulative decay WITHIN the chunk, per key channel, in log space.
+        #     A_t = prod_{s<=t} alpha_s    (a VECTOR over dk, not a scalar)
+        # The derivation needs k~_j = k_j / A_j and k^_t = A_t * k_t, whose Gram is the
+        # decay-weighted G = K^ K~^T -- still one matmul, not a [C,C,dk] tensor. Each factor
+        # over/underflows on its own, so both are centred on the chunk's mean log-decay. The
+        # centring CANCELS inside G and does NOT cancel in the S_0 terms, which is why exp(ref)
+        # is reapplied there explicitly.
+        la = torch.cumsum(torch.log(alpha.view(B, N, chunk, H, dk).permute(0, 3, 1, 2, 4)
+                                    .clamp_min(1e-6)), dim=-2)                 # [B,H,N,C,dk]
         eye = torch.eye(chunk, device=k.device, dtype=k.dtype)
         strict = torch.tril(torch.ones(chunk, chunk, device=k.device, dtype=k.dtype), -1)
         incl = torch.tril(torch.ones(chunk, chunk, device=k.device, dtype=k.dtype), 0)
@@ -509,15 +542,28 @@ class SaryuV3Block(nn.Module):
         outs = []
         for n in range(N):
             kn, vn, qn, bn = k[:, :, n], v[:, :, n], q[:, :, n], bt[:, :, n]
-            A = torch.einsum('bhck,bhdk->bhcd', kn, kn) * strict
-            M = eye + bn[..., None] * A                                        # unit lower tri
-            Sk = torch.einsum('bhvk,bhck->bhcv', S, kn)
-            rhs = bn[..., None] * (vn - Sk)
+            bwn, lan = bw[:, :, n], la[:, :, n]                 # lan: [B,H,C,dk]
+            ref = lan.mean(dim=-2, keepdim=True)                # [B,H,1,dk], per key channel
+            up, dn = torch.exp(lan - ref), torch.exp(-(lan - ref))
+            eref = torch.exp(ref)                               # [B,H,1,dk]
+            # CENTRED factors, used only where the centring cancels; and FULL factors, used where
+            # it does not. G and QK contract over dk, and inside that sum eref[c] * (1/eref[c])
+            # cancels CHANNEL BY CHANNEL -- so the centred forms are exact there. Anything that
+            # contracts S against k or q does NOT cancel, and needs the full k^ = A*k, q^ = A*q.
+            # Applying eref AFTER those contractions was the bug an independent-reference test
+            # caught; the zero-init of ma_proj had made alpha constant across dk, so the
+            # chunk-vs-sequential check never exercised a genuinely per-channel decay.
+            kh, kt_, qh = kn * up, kn * dn, qn * up             # centred k^, k~, q^
+            kh_f, kt_f, qh_f = kh * eref, kt_ / eref, qh * eref  # full k^, k~, q^
+            G = torch.einsum('bhck,bhdk->bhcd', kh, kt_) * strict
+            M = eye + bn[..., None] * G                                        # unit lower tri
+            Sk = torch.einsum('bhvk,bhck->bhcv', S, kh_f)
+            rhs = bwn[..., None] * vn - bn[..., None] * Sk
             U = torch.linalg.solve_triangular(M, rhs, upper=False, unitriangular=True)
-            QK = torch.einsum('bhck,bhdk->bhcd', qn, kn) * incl
-            outs.append(torch.einsum('bhvk,bhck->bhcv', S, qn)
+            QK = torch.einsum('bhck,bhdk->bhcd', qh, kt_) * incl
+            outs.append(torch.einsum('bhvk,bhck->bhcv', S, qh_f)
                         + torch.einsum('bhcd,bhdv->bhcv', QK, U))
-            S = S + torch.einsum('bhcv,bhck->bhvk', U, kn)
+            S = (S + torch.einsum('bhcv,bhck->bhvk', U, kt_f))                 * torch.exp(lan[:, :, -1, :])[..., None, :]
         o = torch.stack(outs, 2).permute(0, 2, 3, 1, 4).reshape(B, N * chunk, H, dk)
         return o[:, :L]
 
@@ -541,18 +587,40 @@ class SaryuV3Block(nn.Module):
         k = F.silu(self._mconv(self.mk_conv, self.mk_proj(z), L)).view(B, L, H, dk)
         v = F.silu(self._mconv(self.mv_conv, self.mv_proj(z), L)).view(B, L, H, dk)
         q, k = F.normalize(q, dim=-1), F.normalize(k, dim=-1)
-        beta = torch.sigmoid(self.mb_proj(z))                       # [B,L,H]
+        beta = torch.sigmoid(self.mb_proj(z))                       # [B,L,H]  erase strength
         if self.mem_neg_eig:
             beta = beta * 2.0     # the eigenvalue 1-b along k goes negative; see delta_reference
+        # write strength: tied to the erase unless decoupling is on (Gated DeltaNet-2)
+        betaw = torch.sigmoid(self.mbw_proj(z)) if self.mem_decouple else beta
+        # decay: 1 means no forgetting, which makes mem_decay=False exactly the old recurrence
+        if self.mem_decay:
+            # FLOORED, and this is a property of the recurrence rather than of one evaluation of
+            # it. The chunk algorithm needs k~ = k/A and k^ = A*k, so it spends the full dynamic
+            # range of the cumulative decay: an unfloored per-channel alpha reaching ~0 gives a
+            # within-chunk log spread near -35, i.e. 1e15, which leaves about one significant
+            # digit even in float64. Measured 3e-6 against an independent reference while the
+            # sequential path was exact -- a conditioning limit, not a bug.
+            # Flooring at exp(-1) bounds the spread at exp(C) and costs nothing anyone wants:
+            # alpha = 0.368 already multiplies the state by 1/e every single token.
+            # The floor must live HERE, not in the kernel, or the two paths stop agreeing.
+            alpha = ALPHA_FLOOR + (1.0 - ALPHA_FLOOR) * torch.sigmoid(self.ma_proj(z))
+            alpha = (alpha.view(B, L, H, dk) if self.mem_decay_channel
+                     else alpha[..., None].expand(B, L, H, dk))
+        else:
+            alpha = torch.ones(B, L, H, dk, device=z.device, dtype=z.dtype)
         if SaryuV3Block.USE_KERNEL:
-            o = self._recall_chunk(q, k, v, beta, self.mem_chunk)
+            o = self._recall_chunk(q, k, v, beta, betaw, alpha, self.mem_chunk)
         else:
             S = torch.zeros(B, H, dk, dk, device=z.device, dtype=z.dtype)
             outs = []
             for t in range(L):
-                kt, vt, qt, bt = k[:, t], v[:, t], q[:, t], beta[:, t][..., None]
+                kt, vt, qt = k[:, t], v[:, t], q[:, t]
+                be = beta[:, t][..., None]
+                bw = betaw[:, t][..., None]
+                at = alpha[:, t][..., None, :]             # [B,H,1,dk], per KEY channel
+                S = S * at                                  # decay, then the delta update
                 Sk = torch.einsum('bhvk,bhk->bhv', S, kt)
-                S = S + torch.einsum('bhv,bhk->bhvk', bt * (vt - Sk), kt)
+                S = S + torch.einsum('bhv,bhk->bhvk', bw * vt - be * Sk, kt)
                 outs.append(torch.einsum('bhvk,bhk->bhv', S, qt))
             o = torch.stack(outs, 1)
         return self.mnorm(o).reshape(B, L, H * dk)
@@ -609,6 +677,7 @@ class SaryuV3LM(nn.Module):
                  gate_cap=0.90, write_topk=None, state_nl=None, state_topk=None,
                  orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False,
                  memory=False, mem_dk=None, mem_neg_eig=False, mem_chunk=None,
+                 mem_decay=False, mem_decouple=False, mem_decay_channel=False,
                  gate_lb=False):
         """nh (reflections per head) and H default to the trained configuration, so the released
         checkpoints load unchanged. They are exposed because nh is the knob the trace law is about
@@ -632,6 +701,9 @@ class SaryuV3LM(nn.Module):
                                                memory=memory, mem_dk=mem_dk,
                                                mem_neg_eig=mem_neg_eig,
                                                mem_chunk=mem_chunk,
+                                               mem_decay=mem_decay,
+                                               mem_decouple=mem_decouple,
+                                               mem_decay_channel=mem_decay_channel,
                                                timescales=timescales, write_scale=write_scale,
                                                gate_w_scale=gate_w_scale, chunk=chunk,
                                                freeze_gate_bias=freeze_gate_bias,

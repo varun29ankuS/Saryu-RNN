@@ -1,0 +1,58 @@
+THE OPTIMIZER DOES NOT EXPLAIN THE MEMORY'S CONVERGENCE OR ITS BIMODALITY
+4 pairs, gap 4, memory=True, nl=2, 3000 steps, chance 0.250.
+
+  arm            best per seed           spread    steps to 0.8
+  adamw@1e-3     0.797, 0.945, 0.922     0.148     None, 2250, 2250
+  muon@3e-4      0.312, 0.781, 0.867     0.555     None, None, 3000
+  muon@1e-3      0.977, 0.766*             --      2250, None        (* incomplete)
+
+P1 NOT SUPPORTED. Muon at 3e-4 is worse on every measure. Muon at 1e-3 has the single best score
+seen (0.977 against AdamW's best of 0.945) but that is one seed.
+
+P2 UNRESOLVED, AND MY FIRST READING OF IT WAS PREMATURE. I wrote that P2 was "falsified in the
+opposite direction" from the muon@3e-4 arm while the 1e-3 arm was still incomplete. With both of
+its seeds finished the picture is different and thinner than either claim:
+
+    adamw@1e-3   0.797, 0.945, 0.922   spread 0.148
+    muon@3e-4    0.312, 0.781, 0.867   spread 0.555
+    muon@1e-3    0.977, 0.945          spread 0.031    <- tightest in the sweep
+
+At the WRONG rate Muon is much worse and much wider. At 1e-3 it has the tightest spread and the
+highest scores. But AdamW's 0.148 comes entirely from one bad seed -- its other two are 0.945 and
+0.922, a spread of 0.023, TIGHTER than Muon's 0.031. So on two or three seeds the honest
+difference is solve rate, 2/2 for Muon@1e-3 against 2/3 for AdamW, which is weak evidence either
+way. P2 is not settled and should not be quoted in either direction.
+
+P3 NOT SUPPORTED, AND THIS IS THE RESULT THAT IS ACTUALLY SETTLED. Steps to 0.8 is 2250 under
+EVERY optimizer and rate that reached it -- adamw@1e-3 on two seeds, muon@1e-3 on both. Unchanged
+from the value that produced the 1.8x excess over a faithful DeltaNet (750 transformer, 1250
+DeltaNet, 2250 Saryu+memory). The optimizer does not move convergence speed at all.
+
+SO THE EXCESS IS NOT AN OPTIMIZER ARTEFACT. That much is firm: 2250 steps regardless. It stays
+architectural until something else explains it.
+
+THE BIMODALITY IS STILL OPEN. It was reported here as "not an optimizer artefact either", which
+the completed data does not support -- muon@1e-3 solved 2/2 where adamw solved 2/3, and the
+sample is far too small to separate that from chance. Neither claimed.
+
+WHY THE PREDICTION WAS WRONG, AND IT IS A SCOPE ERROR. optimizer_escape.txt measured Muon beating
+AdamW 1.000 to 0.474 on 2-pair MQAR -- but on the TRANSPORT-ONLY model, with no matrix memory.
+That was generalised here to a different architecture on a harder task. The advantage was real
+where measured and does not transfer.
+
+This is the same mistake as the standing "keep AdamW" verdict, which came from optimizer_5m on
+LANGUAGE MODELLING and was carried into recall experiments unexamined. An optimizer result is
+scoped to the architecture AND the task it was measured on. Both directions of that error were
+made in one day.
+
+WHAT THIS LEAVES. One useful practical finding: Muon at 3e-4 is a bad setting for this
+configuration, which matters because gate_retention.py uses exactly that -- Muon at LR=3e-4. The
+gate-bound result (6/7 against 1/3) was obtained under an optimizer setting shown here to be poor
+for the memory. That does not invalidate it, since it is a comparison between two arms sharing the
+setting, but it means the absolute numbers there are not a ceiling.
+
+INCOMPLETE. muon@1e-3 has one finished seed of three; the machine ran out of memory twice during
+this sweep. The conclusion above rests on the three complete seeds of adamw@1e-3 and muon@3e-4 and
+should be revisited if muon@1e-3 is ever finished.
+
+Logged under runs/mopt-*.

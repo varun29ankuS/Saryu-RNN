@@ -1,4 +1,18 @@
 WIDTH SCALING  S_3 word problem, H=8 nl=2, 1500 steps, 2 seeds, chance 0.333
+*** CAVEAT: THE TASK IS SATURATED, SO THIS CAN ONLY RULE OUT LARGE DEGRADATION. ***
+Every configuration here reaches a training loss of about 1e-5 by step 1500 with eval 1.000 --
+machine-precision-ish on a task whose chance is 0.333. The falsification below is valid: the
+prediction was that wider models get monotonically WORSE, and there is no degradation at all at
+any width. But a saturated task has no headroom, so it cannot detect a SMALL effect. If the
+scaling rule is wrong by a little rather than entirely, this sweep would not see it.
+The tasks in this repository split in two, and it is worth keeping straight which is which:
+  SATURATED (loss -> 1e-5): the S_3 word problem, the conjunctive controls. Good as controls,
+    useless as discriminators between architectures.
+  DISCRIMINATING (loss stays finite): gap-64 recall at chance 0.016, 4-pair MQAR at longer gaps.
+    Every real result today came from these.
+Found by scanning all runs for near-zero loss at 1000-1500 steps. That scan also confirmed there
+is no leakage anywhere: all 35 near-zero-loss runs have eval ~1.000, and since batches are freshly
+generated every step, low loss means generalisation rather than memorisation.
 trained_geometry item 2: "larger models get monotonically worse ... hold nh/dh fixed"
 composition.txt bands on tr/dh: <=0.750 working, 0.938 partial, 0.984 gone
 

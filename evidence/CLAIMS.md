@@ -46,6 +46,8 @@ was back to optimisation. A full circle, with confident write-ups at each statio
 | 28 | The matrix memory has a knee at gap 8; capacity and persistence are in series | **retracted within the hour** — the gap-8 point was still rising when stopped at 3000 steps. Run to 4250 it crosses 0.8 and reaches 0.898. No knee. Steps-to-solve grows ~linearly with gap (1000/2500/4250 at gaps 0/4/8), which also explains the both_fixes factorial with no architectural claim | reading the convergence curve, not the final number |
 | 27 | Larger models get monotonically worse; nh must scale with dh | **retracted** — scaled width with nh pinned at 2 up to d=512 (tr/dh = 0.938, the "failing" band). Every config solves S_3 at 1.000; the only residue is 500 steps to converge instead of 250 | direct test of our own written prediction |
 | 26 | Our DeltaCell is a fair test of a matrix state | **retracted** — it lacked per-projection short convs, silu on q/k/v, beta in (0,2), per-head RMSNorm before the output projection, and multi-head structure. A faithful implementation scores 1.000 where it scored 0.164 | line-by-line diff against the reference implementation |
+| 29 | A number absent from the run logs is the signature of a fabricated result | **wrong, and it was the first thing built to enforce #25.** The check compared every figure against all 436 eval values in `runs/` and passed `matrix_decision.txt` at 28 of 29 matched — the file already proven fabricated. 436 values over the 1000 three-decimal points in [0,1] means coincidence roughly half the time. Provenance is the discriminating axis and value membership is not; the check had to be scoped to the runs of the file's *own* script | running the new checker against the known-bad file before trusting it |
+| 30 | The results in `evidence/results/` are checkable | **false for 94 of 110 files.** Only 16 have runs behind them from their own script. Run logging arrived 2026-09-17 and was adopted around 09-20, so most of this is age rather than concealment — but it means the foundational tables cannot be checked at all, and those are exactly the ones still being built on: `binding_long` is cited by 19 live files, `composition` by 9, `trained_geometry` by 8 (its rule already retracted as #27), `nh_sweep_shortgap` by 6. **`matrix_decision` — #25, known fabricated — is still cited by 6, including a script written the same day this was found.** Of the 16 checkable files, none has an unexplained figure | `scripts/audit_claims.py` |
 
 ## Tally
 
@@ -131,3 +133,10 @@ arrived before verification did.
    the sweep that eventually caught it.
 4. **Check whether the "missing" idea is already in `refs.bib`.** It was, twice: `krohn1965` and
    `arora2023zoology`.
+5. **A rule written as a sentence is not enforced.** #25 ended with "every figure quoted in a
+   results file must name the run that produced it." That sentence sat here for a day while the
+   file it was about stayed cited in six places. It became real only when it became
+   `scripts/audit_claims.py`.
+6. **Test the checker against a case you already know the answer to.** The first version of that
+   script passed the one file in this repository proven to be fabricated (#29). Any verifier not
+   run against a known positive is an untested assertion that everything is fine.

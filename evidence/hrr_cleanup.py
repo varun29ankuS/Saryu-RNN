@@ -1,5 +1,17 @@
 """The vector route, retested WITH the component its own literature says it needs.
 
+EVERY BASELINE QUOTED BELOW IS RETRACTED. Read this first. The figures 0.836, 0.023 and 0.984 come
+from results/matrix_decision.txt, and no run in this repository produced any of them -- the nine
+logged runs of that experiment scored delta 0.133/0.148/0.164 and hrr 0.039/0.039/0.031 (CLAIMS #25).
+So P1's "baseline 0.836", P2's "the matrix held 0.984", P3, and the falsifier's "matrix_decision.txt
+stands exactly as recorded" are all anchored to numbers that do not exist. The EXPERIMENT is still
+worth running -- whether cleanup rescues a vector state is a real question, and cleanup really was
+missing -- but its predictions cannot be scored against these baselines. Anything this script needs
+as a comparison has to be re-measured here, in its own arms, against its own logged runs.
+
+Found 2026-09-21 by scripts/audit_claims.py, which asked which live files still cite a retracted
+result. Six did.
+
 WHAT THIS IS FIXING, AND IT IS MY OMISSION. cell_shootout.py concluded the vector route was
 "strictly dominated" by the matrix, from a wide-vector convolution-binding cell that scored 0.836
 at 4 pairs and collapsed to 0.023 at 8. That cell unbinds and hands the result straight to a linear

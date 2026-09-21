@@ -149,8 +149,15 @@ in layer 2 ([`results/trained_geometry.txt`](evidence/results/trained_geometry.t
 **A convex, scalar gate.** Each transform has spectral norm at most one and the write is a convex
 mix, so the state is bounded by its inputs for every sequence (a one-line proof in the paper). The
 gate is one scalar per head because a scalar commutes with the reflections, and that is what makes
-the exact parallel kernel possible; a per-dimension gate breaks it
-([`evidence/chunkwise.py`](evidence/chunkwise.py)). The gate is capped at 0.9 so the kernel's
+*this* kernel's derivation work ([`evidence/chunkwise.py`](evidence/chunkwise.py)).
+
+An earlier version said flatly that "a per-dimension gate breaks it." That is too strong.
+Channel-wise gating is compatible with an exact chunk-parallel algorithm in general — KDA does it
+via a diagonal-plus-low-rank formulation, and the matrix memory in this repo now does it too, with
+a decay-weighted Gram `G = K̂K̃ᵀ` and log-space centring, checked exact to 8e-15. Whether the
+*level-1* Householder kernel admits the same treatment is untested; note that with a per-channel
+gate its transition `(I−D)·H₂H₁` is itself diagonal-plus-low-rank, which is precisely the structure
+KDA handles. The gate is capped at 0.9 so the kernel's
 rescaling factors stay below e^8.1.
 
 **An exact parallel kernel, not an approximation.** Training processes chunks of 8 tokens with one
