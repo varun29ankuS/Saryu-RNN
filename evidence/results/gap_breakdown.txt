@@ -1,0 +1,87 @@
+THE KNEE WAS A BUDGET ARTEFACT. RETRACTED. AND THE REAL FINDING IS ABOUT SAMPLE EFFICIENCY.
+
+WHAT I CLAIMED. That the matrix memory has a knee at gap 8 and therefore that its range is bounded
+by the gate's retention -- "capacity and persistence are in series, not independent". Committed,
+then suspended when the convergence curve showed gap 8 still rising when stopped.
+
+WHAT THE CONVERGED RUN SHOWS. Run to 9000 steps, gap 8 crosses 0.8 at step 4250 and converges to
+0.992, plateauing from step 8000. There is no knee and no limit -- the memory SOLVES 4 pairs at
+gap 8. It needed roughly three times the training it was given. The series claim is WITHDRAWN.
+
+STEPS TO CROSS 0.8, memory=True, 4 pairs, nl=2:
+
+    gap 0    1000
+    gap 4    2500
+    gap 8    4250
+
+That is roughly linear: about 400 additional steps per token of gap. It explains both_fixes.txt
+entirely without any architectural claim -- extrapolating, gap 16 needs ~7,400 steps and it was
+given 1,500, which is why every arm there sat near 1/64.
+
+THE COMPARISON THAT MATTERS, AND IT IS THE WORST NUMBER THIS PROJECT HAS PRODUCED
+
+    transformer,      gap 16, 1,500 steps  ->  0.992   (bf-tf-p4-g16-s1)
+    Saryu + memory,   gap  8, ~8,000 steps  ->  0.992   (crosses 0.8 at 4,250)
+
+Five times the training for half the distance, to reach the same score. On SAMPLE EFFICIENCY -- the axis this project
+exists to win, and the one it has never measured -- the transformer is ahead by roughly an order of
+magnitude on this task.
+
+That is a single task, a single seed each, and the transformer was bimodal (0.398 on its other
+seed), so it is not a clean measurement. But it is the first time the two have been compared on
+tokens-to-solve rather than final accuracy, and the direction is not the one the project's thesis
+needs. docs/learning_machine.md section 4 pre-registers the proper version of this measurement and
+its falsifier; this is a reason to run it rather than a substitute for it.
+
+METHOD NOTE. Three conclusions in a row today were drawn from runs that had not converged: the
+both_fixes factorial, the state_volume void test, and this knee. All three were caught by looking
+at the convergence CURVE rather than the final number. Making that routine: no capability limit is
+to be claimed from a run that was still improving when it stopped.
+
+*** CAVEAT ADDED BEFORE THIS IS USED: THE GAP-8 POINT WAS NOT CONVERGED. ***
+The convergence curves make the step requirement grow steeply with gap:
+    gap 0  crosses 0.8 at step 1000
+    gap 4  crosses 0.8 at step 2500   (at step 1500 it was still 0.23)
+    gap 8  0.18 at step 2000, best 0.328 by 3000, STILL RISING when stopped
+So gap 8 plausibly needs 5,000-6,000 steps, and 0.328 is a LOWER BOUND rather than a ceiling. The
+"knee" below may be a budget artefact. Reading a capability limit off an under-trained run is the
+error shape this project has hit repeatedly, and it is not settled until gap 8 is run to
+convergence. The conclusion drawn below -- that capacity and persistence are in series -- is
+SUSPENDED pending that run.
+memory=True, 4 pairs, nl=2, d=128 H=8 nh=2, 3000 steps, chance 0.250.
+
+    gap    seq    best        solved>0.8
+      0     10    1.000       1/1        (a second seed reached 0.984 before being killed)
+      4     14    0.930       1/1        reproduces memory_on.txt exactly (0.930, 0.938)
+      8     18    0.328       0/1
+     16     26    0.039       0/2        (both_fixes.txt, at 1500 steps)
+
+P1 HOLDS. Gap 4 gives 0.930 against memory_on's 0.930/0.938, so the collapse in both_fixes.txt was
+the 1500-step budget and not something else about that harness.
+
+P2 HOLDS. This is a knee, not a decline. 0.930 to 0.328 between gap 4 and gap 8 -- a drop of 0.60
+across four tokens -- then a slow fade to 0.039.
+
+P3 HOLDS. The knee sits at gap 8, which is where the gap first exceeds what the gate retains.
+gate_retention.txt measured retention falling to 8 tokens after 1500 steps and 4 after 6000, with
+training driving it DOWN because an unsolvable task makes holding state pure variance.
+
+WHAT THIS MEANS, AND IT CHANGES THE PICTURE. nh_sweep_shortgap.txt separated capacity and
+persistence as two axes, and this project has treated them as independent ever since. They are not
+independent: they are IN SERIES. The matrix memory gives the state an item axis, so four facts can
+coexist -- but those facts still live in a state the gate is overwriting, and the memory's useful
+RANGE is bounded by the gate's retention. Fixing capacity alone buys recall out to roughly the
+retention horizon and no further.
+
+That is why memory=True scores 0.930 at gap 4 and 0.039 at gap 16, and it predicts that the gate
+lower bound should EXTEND the memory's range rather than add to it independently.
+
+WHERE THE COMPOSITION TEST BELONGS. Gap 8. Capacity is still partly handled there (0.328 against
+0.250 chance) and persistence has just started to bind, so an interaction between the two fixes can
+actually show. both_fixes.py ran at gap 16, where nothing works at all, which is why its 2x2 was
+uninformative.
+
+SCOPE. One seed at gaps 4 and 8, two at gap 0. The knee is a 0.60 drop and unlikely to be seed
+noise, but it is one seed. nl=2, one task, one width.
+
+Every number logged under runs/gb-*.

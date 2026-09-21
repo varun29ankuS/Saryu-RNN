@@ -1,0 +1,9 @@
+GAP BREAKDOWN  memory=True, 4 pairs, nl=2, 9000 steps, 1 seeds, chance 0.250
+memory_on.txt: gap 4 -> 0.930, 0.938.   both_fixes.txt: gap 16 -> 0.039, 0.062
+
+  gap   seq  best per seed        solved>0.8
+------------------------------------------------
+    8    18  0.992        1/1
+
+1332s
+READ: the largest gap with a solve is where the composition test belongs.

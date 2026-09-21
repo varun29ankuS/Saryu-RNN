@@ -1,0 +1,51 @@
+BOTH FIXES  4 pairs, gap 16 (sequence 26), d=128 H=8 nh=2 nl=4, 1500 steps, 2 seeds, chance 0.250
+memory alone at gap 4: 0.281 -> 0.930.  gate bound alone at 1 pair gap 64: 1/3 -> 6/7.
+neither has been run where BOTH bind.
+
+                     arm     params  best per seed
+------------------------------------------------------------
+  transformer (baseline)    563,522  0.398, 0.992
+       neither (control)    757,218  0.016, 0.023
+             memory only  1,031,234  0.039, 0.062
+         gate bound only    757,250  0.039, 0.023
+                    BOTH  1,031,266  0.055, 0.039
+
+3441s
+READ
+  P1 FAILS: the transformer reaches only 0.695. The task is out of reach at
+  this budget, the factorial is VOID, and the Saryu rows must not be read.
+
+READ -- INCONCLUSIVE, AND MY OWN THRESHOLD WAS THE WRONG STATISTIC
+
+The script declared this VOID because the transformer's MEAN was 0.695, below the registered 0.8.
+That is a mean over a bimodal outcome: the seeds were 0.398 and 0.992. One transformer seed SOLVED
+the task. "Solve rate is the statistic, not the mean" is written into two other files in this
+repository and I then coded a mean-based gate here.
+
+So the task is learnable, and the real finding is worse than void:
+
+    chance 0.250
+    neither      0.016, 0.023
+    memory only  0.039, 0.062
+    gate only    0.039, 0.023
+    BOTH         0.055, 0.039
+
+EVERY Saryu arm is far BELOW chance -- around 1/64, i.e. uniform over the whole vocabulary. The
+model has not even learned to restrict its answer to the four values present in the sequence. That
+is not degradation, it is total failure.
+
+AND THE MEMORY FIX DOES NOT SURVIVE THE GAP. It scored 0.930/0.938 at gap 4 (memory_on.txt). Here,
+at gap 16, it gives 0.039/0.062. Whatever the matrix memory fixed, it fixed it only at short range.
+
+THE CONFOUND, stated before anything is concluded: this ran 1500 steps where memory_on used 3000,
+on a sequence of 26 tokens rather than 14. Insufficient training and genuine failure are not
+distinguishable from this table alone.
+
+WHAT IS NOT ESTABLISHED. Whether the two fixes compose. They cannot be tested against each other
+in a regime where neither works alone, so the 2x2 says nothing about interaction. P3 is unmeasured,
+not falsified.
+
+NEXT, and it is a different experiment: find where the memory breaks along the gap axis, with a
+budget matched to memory_on. Composition can only be tested at the largest gap where the memory
+still works, because that is where persistence starts to bind while capacity is still handled.
+
