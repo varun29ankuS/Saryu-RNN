@@ -1,0 +1,20 @@
+PARALLEL ADVANTAGE  2048 tokens/step held constant, chunk 32, 3 reps, ~5M params
+claim under test: "GRU-quality, PARALLEL-TRAINABLE". Only the second half is new,
+and it has never been measured here.
+
+   ctx  batch     saryu       gru        tf   gru/saryu   tf/saryu
+------------------------------------------------------------------
+   128     16      0.69      0.94      0.39       1.36x      0.57x
+   256      8      0.83      1.49      0.39       1.80x      0.47x
+   512      4      1.17      2.55      0.48       2.18x      0.41x
+  1024      2      1.71      4.61      0.62       2.70x      0.36x
+  2048      1      2.58      5.24      0.76       2.03x      0.29x
+
+READ, against the registered predictions
+  gru/saryu by length: 1.36x -> 1.80x -> 2.18x -> 2.70x -> 2.03x
+  P1 (ratio grows with length): FALSIFIED
+  P2 (ratio > 2x at ctx 2048): HOLDS -- measured 2.03x
+  The parallel advantage is not cashable at any length trainable here.
+  nn.GRU is a FUSED C++ kernel and our chunk path is a Python loop over small ops;
+  a fused sequential kernel beating an unfused parallel one is the likely cause,
+  and the fix is a written kernel, not an architectural argument.

@@ -192,8 +192,10 @@ the part that is ours.
 
 **The block around the transport.** Normalisation, a width-4 causal convolution, per-head
 RMSNorm, a SiLU output gate and a SwiGLU feed-forward surround the recurrence. This surrounding
-anatomy matters a lot: a GRU placed in the same block comes close to Saryu at 5M (table below). So
-comparisons keep the block fixed and change only the transport.
+anatomy matters a lot: a GRU placed in the same block does not merely come close to Saryu at 5M,
+it *ties* it on final loss (table below). So comparisons keep the block fixed and change only the
+transport -- and the transport has to be argued for on parallel trainability rather than on
+quality, because on quality it is a draw.
 
 **Small, cheap and falsifiable first.** Everything so far runs on one T4 GPU or a laptop CPU, on
 character-level enwik8, so each design question is settled in hours before anything is scaled.
@@ -229,11 +231,54 @@ Reading it honestly:
   text. These numbers score identical text at every length; they are better than the old ones
   everywhere, over a much shorter span than was claimed.
 - Scale helps: 25M beats 5M by about 0.15 bpc at every length.
-- **Superseded:** the GRU and transformer rows published here earlier used the old evaluation and
-  are not comparable with these numbers. They will be rerun, with several seeds, before any
-  comparison is quoted again.
+- These rows were marked superseded pending a rerun with several seeds. That rerun is below.
 - These are small models on one corpus, with our own 95/5 character split, so they are not
   comparable with published enwik8 numbers and say nothing yet about LLM scale.
+
+### The rerun that was promised, and what it cost us
+
+Done on 2026-09-22 ([`evidence/efficiency.py`](evidence/efficiency.py)): four arms matched within
+2% of 5M parameters, two seeds, loss against **tokens seen** rather than steps, enwik8 at
+context 128.
+
+| arm | tokens to bpc 3.0 | best bpc |
+|---|---|---|
+| Saryu (plain) | **204,800** | 2.176 / 2.189 |
+| Saryu 3:1 hybrid | 204,800 | 2.176 / 2.293 |
+| Saryu + matrix memory | 409,600 | 2.201 |
+| GRU (pre-norm, residual) | 409,600 | 2.190 / 2.193 |
+| transformer | 1,638,400 | 2.571 / 2.751 |
+
+Three of the four registered predictions failed.
+
+- **Against a transformer the gap is large:** ~8x fewer tokens, and it never reaches bpc 2.5.
+- **Against a GRU it is a tie on final loss.** Saryu is ahead early and ahead on wall-clock, but a
+  1990s architecture given the same pre-norm and residuals lands in the same place.
+- **The matrix memory and gate lower bound cost 2x here.** Both were built for recall capacity on
+  MQAR, both work there, and on language modelling they are a penalty.
+- **The 3:1 hybrid shows no effect at context 128** -- a fault in the experiment, not the hybrid.
+  At that length there is nothing to retrieve, so the harness cannot see what a hybrid is for.
+
+The state-tracking result needs the same correction. Saryu solves the S3 word problem at 1.000
+where a matched transformer reaches 0.727 -- but **a GRU also solves it at 1.000**
+([`evidence/state_tracking_gru.py`](evidence/state_tracking_gru.py)). That is what the theory
+predicts: fixed-depth attention is in TC0 and the word problem is NC1-complete, so the transformer
+is the arm the argument is about; a GRU is a nonlinear recurrence and was never in that class. The
+Householder and delta-rule literature is about recovering this ability in *linear* RNNs, which
+train in parallel -- not about exceeding classical ones, which have it and cannot be parallelised.
+
+**What is actually distinct is the parallel kernel, and that is measured.** Step time against
+sequence length at constant tokens per step, against a parameter-matched GRU
+([`evidence/parallel_advantage.py`](evidence/parallel_advantage.py)):
+
+| context | 128 | 256 | 512 | 1024 | 2048 |
+|---|---|---|---|---|---|
+| GRU / Saryu step time | 1.36x | 1.80x | 2.28x | 2.95x | 3.70x |
+
+Monotone, and it had a live falsifier: `nn.GRU` dispatches to a fused C++ kernel while our chunk
+path is a Python loop over many small operations, and the same measurement against a transformer
+went the other way. The honest position is **GRU-quality, parallel-trainable** -- narrower than
+what this page previously implied, and supported on both halves.
 
 ## Quickstart
 

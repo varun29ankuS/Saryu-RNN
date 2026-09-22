@@ -1,0 +1,56 @@
+THE GRU SOLVES IT TOO. OUR STRONGEST CAPABILITY CLAIM IS ABOUT RECURRENCE, NOT ABOUT US.
+================================================================================
+conjunctive.txt records the cleanest capability result in this project -- S_3 word
+problem, Saryu 1.000/1.000 against a matched transformer's 0.562/0.859, with the
+transport causally necessary and the memory causally irrelevant. It has been quoted as
+the architecture's strongest evidence. A GRU was never run on it.
+
+    saryu        1.000, 1.000
+    gru          1.000, 1.000
+    transformer  0.727, 0.703      (chance 0.333)
+
+All three registered predictions hold, including the one that costs us. This is what the
+theory says should happen and the expectation was written down before running: fixed-depth
+log-precision attention is in TC^0, the word problem for a non-solvable group is
+NC^1-complete, and regular languages are not all inside TC^0 -- so the TRANSFORMER is the
+arm the complexity argument is about. It says nothing against a GRU, which is a nonlinear
+recurrence, i.e. a finite automaton with real-valued state, and finite automata are
+exactly what recognises regular languages.
+
+WHAT HAS TO CHANGE. "Saryu solves state tracking where a transformer cannot" is true and
+stays. "Saryu has a state-tracking capability that distinguishes it" does not: a 1990s GRU
+matches it at 1.000/1.000. The Householder and delta-rule literature is about recovering
+this ability in LINEAR RNNs -- which train in parallel -- and not about exceeding
+classical nonlinear ones, which already have it and cannot be parallelised.
+
+WHAT SURVIVES, AND IT IS NOW THE WHOLE CLAIM. Saryu matches a GRU on capability here and
+ties it on enwik8 loss (efficiency_hybrid.txt: 2.176/2.189 against 2.190/2.193), while
+being parallel-trainable: 3.7x faster per step than a matched GRU at ctx 2048, and the gap
+widens monotonically with length (parallel_advantage.txt). That is a coherent position --
+GRU-quality, parallel-trainable -- and it is smaller and more defensible than what this
+repository was previously implying.
+================================================================================
+
+STATE TRACKING, WITH THE GRU CONTROL  S_3 word problem, 3000 steps, 2 seeds, chance 0.333
+conjunctive.txt: saryu 1.000/1.000, transformer 0.562/0.859. No GRU was ever run.
+theory says a TRANSFORMER cannot do this (TC^0 vs NC^1). It says nothing against a
+GRU, which is a nonlinear recurrence -- i.e. a finite automaton with real state.
+
+           arm     params  best per seed
+--------------------------------------------------
+         saryu    384,905  1.000, 1.000
+           gru    430,617  1.000, 1.000
+   transformer    296,249  0.727, 0.703
+
+644s
+
+READ, against the registered predictions
+  P1 GRU solves it: 2/2 seeds above 0.9 -> HOLDS
+  P2 saryu reproduces 1.000: 2/2
+  P3 transformer does not reliably solve it: 0/2 above 0.9
+
+  THE GRU SOLVES IT. Our state-tracking result is "a recurrence beats attention",
+  NOT "this recurrence beats other recurrences". Every place the repo implies the
+  latter needs rewording. The architecture's distinct claim is then parallel
+  trainability alone -- measured at 3.7x over a GRU at ctx 2048 in
+  results/parallel_advantage.txt -- and not expressivity over classical RNNs.
