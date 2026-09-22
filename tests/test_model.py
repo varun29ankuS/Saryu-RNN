@@ -1,4 +1,5 @@
 """Model invariants. Run from the repo root: python -m pytest tests"""
+import math
 import os
 import sys
 
@@ -60,15 +61,16 @@ def test_kernel_is_exact_at_every_chunk_size(C):
     assert err < 1e-4, (C, err)
 
 
+@pytest.mark.parametrize('ogate', [True, False])
 @pytest.mark.parametrize('L', [7, 8, 16, 19, 64])
-def test_memory_chunk_kernel_equals_sequential_recurrence(L):
+def test_memory_chunk_kernel_equals_sequential_recurrence(L, ogate):
     """The matrix memory's chunk-parallel form is EXACT, not an approximation.
 
     Same contract as the level-1 kernel above: USE_KERNEL is a speed switch and never a semantic
     one. Lengths that are not a multiple of the chunk are included because the padding path is
     where an off-by-one would hide."""
     torch.manual_seed(0)
-    blk = SaryuV3LM(64, 128, 1, memory=True).double().eval().mix[0]
+    blk = SaryuV3LM(64, 128, 1, memory=True, mem_ogate=ogate).double().eval().mix[0]
     z = torch.randn(3, L, 128, dtype=torch.double)
     try:
         SaryuV3Block.USE_KERNEL = True
@@ -80,11 +82,37 @@ def test_memory_chunk_kernel_equals_sequential_recurrence(L):
     assert torch.allclose(fast, slow, atol=1e-10), (fast - slow).abs().max().item()
 
 
-@pytest.mark.parametrize('decay,chan,decouple', [(True, False, False), (False, False, True),
-                                                 (True, False, True), (True, True, False),
-                                                 (True, True, True)])
+def _perturb_decay(blk):
+    """Give the decay gate an input term, so alpha actually varies over tokens and channels.
+
+    ma_proj is ZERO-initialised, which makes alpha constant across dk and turns the channel-wise
+    path into the head-wise one. Without this perturbation the exactness test reported 8e-15
+    while the channel-wise chunk kernel was wrong by 6.2. The A_log form needs a SMALLER
+    perturbation: exp(A_log) reaches 16, so an input term of the size the sigmoid form takes
+    pushes nearly every g below the floor, where the clamp makes alpha constant again -- the
+    same blind spot from the other side. The spread assertion below is what guards that."""
+    std = 0.02 if blk.mem_alog else 0.5
+    torch.nn.init.normal_(blk.ma_proj.weight, std=std)
+
+
+def _alpha_of(blk, z):
+    """The decay the block feeds its kernel, read off by running the sigmoid/A_log branch."""
+    from saryu.model import ALPHA_FLOOR
+    B, L, _ = z.shape
+    H = blk.H
+    if blk.mem_alog:
+        a = blk.ma_proj(z).view(B, L, H, -1) + blk.dt_bias.view(H, -1)
+        g = -torch.exp(blk.A_log)[:, None] * F.softplus(a)
+        return torch.exp(torch.clamp(g, min=math.log(ALPHA_FLOOR))).reshape(B, L, H, -1)
+    return (ALPHA_FLOOR + (1.0 - ALPHA_FLOOR) * torch.sigmoid(blk.ma_proj(z))).view(B, L, H, -1)
+
+
+@pytest.mark.parametrize('decay,chan,decouple,alog', [
+    (True, False, False, False), (False, False, True, False), (True, False, True, False),
+    (True, True, False, False), (True, True, True, False),
+    (True, False, False, True), (True, True, False, True), (True, True, True, True)])
 @pytest.mark.parametrize('L', [7, 19, 64])
-def test_gated_memory_chunk_kernel_equals_sequential(decay, chan, decouple, L):
+def test_gated_memory_chunk_kernel_equals_sequential(decay, chan, decouple, alog, L):
     """Decay and decoupled erase/write must keep the chunk kernel EXACT.
 
     The chunk form carries the decay as a row scaling: W solves
@@ -96,15 +124,19 @@ def test_gated_memory_chunk_kernel_equals_sequential(decay, chan, decouple, L):
     padded with 1.0 rather than 0."""
     torch.manual_seed(0)
     blk = SaryuV3LM(64, 128, 1, memory=True, mem_decay=decay, mem_decay_channel=chan,
-                    mem_decouple=decouple).double().eval().mix[0]
-    # ma_proj is ZERO-initialised, which makes alpha constant across dk and turns the
-    # channel-wise path into the head-wise one. Without this perturbation the test reported
-    # 8e-15 while the channel-wise chunk kernel was wrong by 6.2.
+                    mem_decouple=decouple, mem_alog=alog).double().eval().mix[0]
     if decay:
-        torch.nn.init.normal_(blk.ma_proj.weight, std=0.5)
+        _perturb_decay(blk)
     if decouple:
         torch.nn.init.normal_(blk.mbw_proj.weight, std=0.5)
     z = torch.randn(2, L, 128, dtype=torch.double)
+    if decay:
+        with torch.no_grad():
+            al = _alpha_of(blk, z)
+        from saryu.model import ALPHA_FLOOR
+        assert (al > ALPHA_FLOOR + 1e-9).double().mean() > 0.5, 'most of alpha sits on the floor'
+        if chan:
+            assert al.std(dim=-1).mean() > 1e-3, 'alpha is constant across channels'
     try:
         SaryuV3Block.USE_KERNEL = True
         fast = blk.recall(z)
@@ -132,6 +164,7 @@ def test_memory_gates_are_live_and_receive_gradient():
     blk = m.mix[0]
     assert blk.ma_proj.weight.grad.norm() > 0, 'decay gate is dead'
     assert blk.mbw_proj.weight.grad.norm() > 0, 'write gate is dead'
+    assert blk.mz_proj.weight.grad.norm() > 0, 'output gate is dead'
 
 
 def test_gate_lower_bound_is_monotone_by_construction():
@@ -187,7 +220,13 @@ def _memory_reference(blk, z):
     bw = torch.sigmoid(blk.mbw_proj(z)) if blk.mem_decouple else be
     if blk.mem_decay:
         from saryu.model import ALPHA_FLOOR
-        al = ALPHA_FLOOR + (1.0 - ALPHA_FLOOR) * torch.sigmoid(blk.ma_proj(z))
+        if blk.mem_alog:
+            # g = -exp(A_log) softplus(a + dt_bias), per head; alpha = exp(g), floored
+            a = blk.ma_proj(z).view(B, L, H, -1) + blk.dt_bias.view(H, -1)
+            g = -torch.exp(blk.A_log)[:, None] * F.softplus(a)
+            al = torch.exp(torch.clamp(g, min=math.log(ALPHA_FLOOR))).reshape(B, L, -1)
+        else:
+            al = ALPHA_FLOOR + (1.0 - ALPHA_FLOOR) * torch.sigmoid(blk.ma_proj(z))
         al = al.view(B, L, H, dk) if blk.mem_decay_channel else al[..., None].expand(B, L, H, dk)
     else:
         al = torch.ones(B, L, H, dk, dtype=z.dtype)
@@ -199,13 +238,20 @@ def _memory_reference(blk, z):
         S = S + torch.einsum('bhv,bhk->bhvk',
                              bw[:, i][..., None] * v[:, i] - be[:, i][..., None] * Sk, k[:, i])
         out.append(torch.einsum('bhvk,bhk->bhv', S, q[:, i]))
-    return blk.mnorm(torch.stack(out, 1)).reshape(B, L, H * dk)
+    o = torch.stack(out, 1)
+    # gated RMSNorm, in the order both shipped models use: norm, weight, THEN gate
+    o = o * torch.rsqrt(o.pow(2).mean(-1, keepdim=True) + 1e-6) * blk.mnorm.w
+    if blk.mz_proj is not None:
+        o = o * F.silu(blk.mz_proj(z).view(B, L, H, dk))
+    return o.reshape(B, L, H * dk)
 
 
-@pytest.mark.parametrize('decay,chan,decouple', [(False, False, False), (True, False, False),
-                                                 (True, True, False), (True, True, True),
-                                                 (False, False, True)])
-def test_memory_matches_an_independent_reference(decay, chan, decouple):
+@pytest.mark.parametrize('ogate', [True, False])
+@pytest.mark.parametrize('decay,chan,decouple,alog', [
+    (False, False, False, False), (True, False, False, False), (True, True, False, False),
+    (True, True, True, False), (False, False, True, False),
+    (True, False, False, True), (True, True, False, True), (True, True, True, True)])
+def test_memory_matches_an_independent_reference(decay, chan, decouple, alog, ogate):
     """The model must match equations written out separately, on BOTH evaluation paths.
 
     This is what catches errors the chunk-vs-sequential exactness test cannot: anything wrong in
@@ -213,9 +259,9 @@ def test_memory_matches_an_independent_reference(decay, chan, decouple):
     decay) leaves them agreeing with each other while both being wrong."""
     torch.manual_seed(0)
     blk = SaryuV3LM(64, 128, 1, memory=True, mem_decay=decay, mem_decay_channel=chan,
-                    mem_decouple=decouple).double().eval().mix[0]
+                    mem_decouple=decouple, mem_ogate=ogate, mem_alog=alog).double().eval().mix[0]
     if decay:
-        torch.nn.init.normal_(blk.ma_proj.weight, std=0.5)
+        _perturb_decay(blk)
     if decouple:
         torch.nn.init.normal_(blk.mbw_proj.weight, std=0.5)
     z = torch.randn(2, 19, 128, dtype=torch.double)
@@ -248,6 +294,96 @@ def test_decoupled_write_gate_actually_decouples():
         after = blk.recall(z)
     d = (before - after).abs().max()
     assert d > 1e-6, f'the write gate is not being used: {d:.3g}'
+
+
+@pytest.mark.parametrize('chan', [False, True])
+def test_alog_decay_starts_heads_at_different_timescales(chan):
+    """Under the A_log form the per-head decay must be spread at init; under the sigmoid form it
+    is degenerate -- every head at the same alpha -- which is the thing being corrected.
+
+    Read at z = 0, where ma_proj contributes only its bias, so what is measured is the
+    initialisation and nothing else. Kimi's init is A_log = log U(1,16) per head with a
+    log-uniform dt_bias, so alpha = exp(-A dt) spans from the floor to ~0.999; over 8 heads the
+    spread cannot be small. Also checks the bias trap: the sigmoid form's +4.0 bias would put
+    the A_log form at alpha ~ 0.05 -- the memory dead at init -- so the median head must still
+    retain most of its state."""
+    from saryu.model import ALPHA_FLOOR
+    torch.manual_seed(0)
+    blk = SaryuV3LM(64, 128, 1, memory=True, mem_decay=True, mem_decay_channel=chan,
+                    mem_alog=True).mix[0]
+    assert float(blk.ma_proj.bias.abs().max()) == 0.0, 'softplus bias must not be the sigmoid +4'
+    z = torch.zeros(1, 1, 128)
+    with torch.no_grad():
+        per_head = _alpha_of(blk, z)[0, 0].mean(-1)                    # [H]
+    assert per_head.shape == (blk.H,)
+    assert float(per_head.max() - per_head.min()) > 0.1, per_head
+    assert float(per_head.std()) > 0.03, per_head
+    assert float(per_head.median()) > 0.8, f'memory is mostly erased at init: {per_head}'
+    assert float(per_head.min()) >= ALPHA_FLOOR - 1e-6
+
+    torch.manual_seed(0)
+    old = SaryuV3LM(64, 128, 1, memory=True, mem_decay=True, mem_decay_channel=chan).mix[0]
+    with torch.no_grad():
+        old_heads = _alpha_of(old, z)[0, 0].mean(-1)
+    assert float(old_heads.max() - old_heads.min()) == 0.0, 'the sigmoid form was not degenerate?'
+
+
+def test_alog_decay_parameters_are_live_and_receive_gradient():
+    """A_log, dt_bias and the input term must all reach the loss (after the m_out perturbation
+    that test_memory_gates_are_live_and_receive_gradient documents)."""
+    torch.manual_seed(0)
+    m = SaryuV3LM(64, 128, 2, memory=True, mem_decay=True, mem_alog=True)
+    for blk in m.mix:
+        torch.nn.init.normal_(blk.m_out.weight, std=0.02)
+    x = torch.randint(0, 64, (2, 16))
+    m(x).sum().backward()
+    blk = m.mix[0]
+    assert blk.A_log.shape == (blk.H,) and blk.dt_bias.shape == (blk.H,)
+    assert blk.A_log.grad.norm() > 0, 'A_log is dead'
+    assert blk.dt_bias.grad.norm() > 0, 'dt_bias is dead'
+    assert blk.ma_proj.weight.grad.norm() > 0, 'decay input term is dead'
+    off = SaryuV3LM(64, 128, 1, memory=True, mem_decay=True).mix[0]
+    assert off.A_log is None and off.dt_bias is None
+    assert float(off.ma_proj.bias.min()) == 4.0, 'the sigmoid form must keep its bias'
+
+
+def test_memory_output_gate_is_norm_then_weight_then_gate():
+    """The gate must be applied AFTER the RMSNorm and its weight, never before.
+
+    Measured on the attention-mimicry surrogate (evidence/results/delta_gate_decay.txt): the
+    reversed order, gate-then-norm, scored 1.035 -- worse than a fitted linear map and worse than
+    having no gate at all -- against 0.334 for norm-then-gate. Same parameters, same component.
+    Both orders produce finite outputs of the right shape, so only an explicit check of the
+    algebra can tell them apart. RMSNorm is scale-invariant per row, so rmsnorm(ungated * g) IS
+    the gate-then-norm output, and this asserts the model is NOT that."""
+    torch.manual_seed(0)
+    gated = SaryuV3LM(64, 128, 1, memory=True, mem_ogate=True).double().eval().mix[0]
+    plain = SaryuV3LM(64, 128, 1, memory=True, mem_ogate=False).double().eval().mix[0]
+    missing, unexpected = plain.load_state_dict(gated.state_dict(), strict=False)
+    assert not missing and unexpected == ['mz_proj.weight'], (missing, unexpected)
+    with torch.no_grad():
+        gated.mnorm.w.mul_(3.0); plain.mnorm.w.mul_(3.0)    # a non-trivial norm weight
+        torch.nn.init.normal_(gated.mz_proj.weight, std=0.5)
+        z = torch.randn(2, 16, 128, dtype=torch.double)
+        B, L, H, dk = 2, 16, gated.H, gated.mem_dk
+        g = F.silu(gated.mz_proj(z).view(B, L, H, dk))
+        out = gated.recall(z).view(B, L, H, dk)
+        ungated = plain.recall(z).view(B, L, H, dk)           # norm and weight, no gate
+        right = ungated * g                                    # norm -> weight -> gate
+        wrong = (ungated * g)
+        wrong = wrong * torch.rsqrt(wrong.pow(2).mean(-1, keepdim=True) + 1e-6) * gated.mnorm.w
+    assert torch.allclose(out, right, atol=1e-12), (out - right).abs().max().item()
+    assert not torch.allclose(out, wrong, atol=1e-3), 'the gate is applied before the norm'
+
+
+def test_memory_output_gate_off_removes_the_parameter():
+    """mem_ogate=False must leave the ungated memory reachable, with no gate parameter."""
+    torch.manual_seed(0)
+    plain = SaryuV3LM(64, 128, 1, memory=True, mem_ogate=False)
+    assert plain.mix[0].mz_proj is None
+    assert not any('mz_proj' in n for n, _ in plain.named_parameters())
+    gated = SaryuV3LM(64, 128, 1, memory=True)                 # the default is gated
+    assert gated.mix[0].mz_proj is not None
 
 
 def test_memory_off_is_bit_identical_to_the_default():
@@ -467,3 +603,50 @@ def test_partial_rope_leaves_the_unrotated_channels_untouched():
     out = _rope(t, f.cos(), f.sin(), rd)
     assert torch.equal(out[..., rd:], t[..., rd:])         # tail is bit-identical
     assert not torch.allclose(out[..., :rd], t[..., :rd])  # head really was rotated
+
+
+# ---------------------------------------------------------------- multi-session resume
+
+def test_generator_state_round_trips_so_resume_does_not_repeat_batches():
+    """A resumed run must continue the data order, not restart it.
+
+    scripts/train.py saved model, step and optimizer but NOT the generator. On resume the
+    generator restarted from its seed, so session two re-trained on exactly the batches session
+    one had already seen -- silently, with a loss curve that looks healthy. A two-session run
+    would have been one session of data seen twice. This asserts the round-trip that prevents it.
+    """
+    g = torch.Generator().manual_seed(1)
+    first = [torch.randint(0, 1000, (4,), generator=g) for _ in range(5)]
+    state = g.get_state()
+    after = [torch.randint(0, 1000, (4,), generator=g) for _ in range(5)]
+
+    # a fresh generator on the same seed WITHOUT the state repeats the first batches
+    g2 = torch.Generator().manual_seed(1)
+    naive = [torch.randint(0, 1000, (4,), generator=g2) for _ in range(5)]
+    assert all(torch.equal(a, b) for a, b in zip(first, naive)), 'precondition'
+
+    # restoring the state continues instead
+    g3 = torch.Generator().manual_seed(999)
+    g3.set_state(state)
+    resumed = [torch.randint(0, 1000, (4,), generator=g3) for _ in range(5)]
+    assert all(torch.equal(a, b) for a, b in zip(after, resumed))
+    assert not any(torch.equal(a, b) for a, b in zip(first, resumed))
+
+
+def test_checkpoint_carries_everything_needed_to_resume():
+    """The saved dict must contain model, optimizer, step, generator AND the second optimizer.
+
+    Muon's momentum lives in opt2, which was never saved, so every resumed muon session
+    restarted momentum from zero. Checked as a contract on the keys rather than by reading the
+    training script, so it fails if a future edit drops one."""
+    import ast
+    import pathlib
+    src = pathlib.Path(__file__).resolve().parent.parent / 'scripts' / 'train.py'
+    tree = ast.parse(src.read_text(encoding='utf-8'))
+    saves = [n for n in ast.walk(tree)
+             if isinstance(n, ast.Call) and getattr(n.func, 'attr', None) == 'save']
+    assert saves, 'no torch.save in the trainer'
+    for call in saves:
+        keys = {k.value for k in call.args[0].keys if isinstance(k, ast.Constant)}
+        missing = {'state', 'opt', 'step', 'gen', 'opt2'} - keys
+        assert not missing, f'checkpoint is missing {sorted(missing)}'

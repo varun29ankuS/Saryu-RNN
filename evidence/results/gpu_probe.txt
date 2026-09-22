@@ -1,0 +1,96 @@
+GPU PROBE ON A T4. THE WEEK IS FEASIBLE, AND THE PESSIMISTIC PREDICTION WAS WRONG.
+================================================================================
+Run on Kaggle, Tesla T4, torch 2.10.0+cu128, 8 layers, chunk 32. First time this
+architecture has ever executed on a GPU.
+
+P1 FALSIFIED, in our favour. The registered prediction was that a T4 would punish an
+unfused eager kernel HARDER than a CPU, because launch overhead is a fixed cost per
+operation and ours are small. The opposite happened: the transformer/Saryu throughput
+ratio is 1.21-1.63x at batch 32, against 2.0-2.9x measured on CPU. The GPU is KINDER
+to this kernel than the laptop was.
+
+P2 HOLDS, and it is the actionable one. Batch size is what closes the gap, because it
+amortises launch overhead across more work per call:
+    d=328  B=8  ->  3.19x        d=328  B=32  ->  1.63x
+    d=768  B=8  ->  1.37x        d=768  B=32  ->  1.21x
+Train at the largest batch that fits. That is worth about 2x and costs nothing.
+
+P3 HOLDS. 689M tokens per 9-hour session at d=328/B=32/T=512; 430M at d=512.
+The falsifier -- under ~100M tokens per session, meaning no model this week -- did not
+fire, by a factor of four at the smallest useful size.
+
+THE REAL CONSTRAINT IS MEMORY, NOT SPEED, and it was not the one being watched. Peak
+memory is 2-3x the transformer's at matched settings: 13.56 GB against 4.71 GB at
+d=328/B=32/T=1024, and Saryu OOMs at d=512/B=32/T=1024 and d=768/B=32/T=1024 where the
+transformer fits in 7-11 GB. The chunk kernel materialises large intermediates -- the
+[B,H,N,C,dk] reshapes and the per-chunk Gram matrices -- and nothing has ever been done
+about it because no CPU run was big enough to care. That is now the binding limit on
+model size, and it is a kernel problem rather than an architectural one.
+
+THE CONFIGURATION THIS SELECTS, on tokens-per-parameter rather than on peak throughput:
+    d=512, 8 layers, ~23.7M params, B=32, T=512   ->  430M tokens/session, 9.76 GB peak
+Two sessions is ~860M tokens, about 36 tokens per parameter, which is the right side of
+Chinchilla for a small model. d=328 is faster per token but the model is too small to
+say much; d=768 fits only at batch 8 and drops to 205M tokens/session.
+================================================================================
+
+bundle: 4 files | config: {'STEPS': '20', 'NL': '8'}
+torch 2.10.0+cu128 | cuda True | Tesla T4
+GPU PROBE  device=cuda, 8 layers, chunk 32, 20 timed steps
+this architecture has never run on a GPU. The kernel is unfused eager, which a GPU
+punishes harder than a CPU does. Everything this week depends on the number below.
+
+   model     d    B     T      params      tok/s   s/step  peakGB
+--------------------------------------------------------------------
+   saryu   328    8   512   9,902,040     10,577    0.387    1.78
+      tf   328    8   512  12,042,704     33,707    0.122    0.73
+   saryu   328   32   512   9,902,040     21,256    0.771    6.82
+      tf   328   32   512  12,042,704     34,714    0.472    2.43
+   saryu   328    8  1024   9,902,040     10,910    0.751    3.42
+      tf   328    8  1024  12,042,704     28,152    0.291    1.31
+   saryu   328   32  1024   9,902,040     17,792    1.842   13.56
+      tf   328   32  1024  12,042,704     27,175    1.206    4.71
+   saryu   512    8   512  23,746,752      9,903    0.414    2.66
+      tf   512    8   512  27,842,048     17,937    0.228    1.22
+   saryu   512   32   512  23,746,752     13,285    1.233    9.76
+      tf   512   32   512  27,842,048     18,469    0.887    3.87
+   saryu   512    8  1024  23,746,752      9,062    0.904    5.03
+      tf   512    8  1024  27,842,048     16,142    0.507    2.11
+   saryu   512   32  1024                    OOM
+      tf   512   32  1024  27,842,048     16,466    1.990    7.41
+   saryu   768    8   512  52,921,280      6,339    0.646    4.02
+      tf   768    8   512  60,637,184      8,667    0.473    2.04
+   saryu   768   32   512  52,921,280      7,269    2.254   14.27
+      tf   768   32   512  60,637,184      8,785    1.865    6.01
+   saryu   768    8  1024  52,921,280      5,752    1.424    7.39
+      tf   768    8  1024  60,637,184      7,859    1.042    3.36
+   saryu   768   32  1024                    OOM
+      tf   768   32  1024  60,637,184      7,894    4.151   11.31
+
+READ, against the registered predictions
+  transformer / saryu throughput ratio (>1 means the transformer is faster):
+    d=328   B=8    T=512    3.19x
+    d=328   B=8    T=1024   2.58x
+    d=328   B=32   T=512    1.63x
+    d=328   B=32   T=1024   1.53x
+    d=512   B=8    T=512    1.81x
+    d=512   B=8    T=1024   1.78x
+    d=512   B=32   T=512    1.39x
+    d=768   B=8    T=512    1.37x
+    d=768   B=8    T=1024   1.37x
+    d=768   B=32   T=512    1.21x
+  P1 worse than CPU's 2.0-2.9x: not shown (range 1.21-3.19x)
+  P2 ratio improves with batch: B=8 1.37x -> B=32 1.21x -> HOLDS
+
+  TOKENS PER 9-HOUR SESSION, the planning number:
+    d=328   B=8    T=512         343M tokens/session
+    d=328   B=8    T=1024        353M tokens/session
+    d=328   B=32   T=512         689M tokens/session
+    d=328   B=32   T=1024        576M tokens/session
+    d=512   B=8    T=512         321M tokens/session
+    d=512   B=8    T=1024        294M tokens/session
+    d=512   B=32   T=512         430M tokens/session
+    d=768   B=8    T=512         205M tokens/session
+    d=768   B=8    T=1024        186M tokens/session
+    d=768   B=32   T=512         236M tokens/session
+  P3 >= 500M tokens in two sessions: HOLDS (1377M at the best configuration)

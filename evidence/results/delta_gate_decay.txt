@@ -1,0 +1,46 @@
+THE OUTPUT GATE AND THE A_log DECAY ARE ONE MECHANISM, NOT TWO. TOGETHER THEY CUT 40%.
+================================================================================
+                 residual per seed        mean     vs base (seed spread 0.034)
+    base         0.3828, 0.3804          0.3816        --
+    alog         0.3989, 0.3655          0.3822     nothing
+    ogate        0.3508, 0.3166          0.3337     -0.048, marginal
+    ogate+alog   0.2394, 0.2165          0.2280     -0.154, 4.5x the spread
+
+AN INTERACTION, WHICH IS WHY NEITHER SHOWED UP ALONE. A spread of decay timescales is only
+useful if the layer can suppress the heads whose state is not relevant at this token; without
+a gate, fast-decaying heads inject noise into every read. Without a spread of timescales, the
+gate has little to choose between. They are halves of one control system.
+
+That also explains a standing puzzle. results/gate_timescales.txt records three separate
+attempts in this project to install a timescale ladder by hand, each collapsing within 1000
+steps. All three installed the decay half with no gate. They were half a mechanism.
+
+CONTEXT: THIS IS THE ONLY THING THAT HAS MOVED THE NUMBER. The capacity sweep
+(results/delta_capacity.txt) tried 2x and 4x state, 2 and 3 writes per token, and both
+together. Every arm landed inside the seed spread. 3.9x the parameters bought nothing. The
+registered falsifier for that sweep -- "the 0.38 is a property of the delta rule itself rather
+than of how it is sized" -- fired. It was right that SIZE is not the constraint, and wrong to
+conclude the 0.38 was intrinsic: it was missing controls, not missing capacity.
+
+AND THE ORDER OF OPERATIONS IS NOT A DETAIL. The first implementation of the gate here used
+gate-then-norm, the Mamba-2 order, written from memory. It scored 1.0349 / 1.0395 -- WORSE than
+a fitted linear map's 0.83, i.e. worse than not having the layer. Qwen3NextRMSNormGated is
+norm-then-gate and its source carries the comment "Norm before gate". Same parameters, same
+component, 1.03 against 0.334. Had that run finished, the conclusion would have been "the
+output gate is harmful" with a number attached.
+
+WHAT IS NOT ESTABLISHED. This measures the delta rule's ability to MIMIC A SOFTMAX ATTENTION
+LAYER, on synthetic AR(1) hidden states, two seeds. It does not show that the fixed memory earns
+its cost in language modelling -- results/efficiency_hybrid.txt measured the CURRENT memory as a
+2x penalty on tokens-to-loss, and whether the corrected one is still a penalty is a separate
+experiment that has not been run.
+================================================================================
+
+DELTA CAPACITY  d=256 heads=8 ctx=256, 1500 steps, 2 seeds
+which limitation stops the delta rule matching a softmax attention layer?
+baseline to beat: 0.38 residual (distill_surrogate.txt). A linear map gets 0.83.
+
+           arm    params   vs base  residual per seed
+----------------------------------------------------------
+          base   201,240     1.00x  0.3828, 0.3804
+         ogate   266,808     1.33x  0.3508, 0.3166

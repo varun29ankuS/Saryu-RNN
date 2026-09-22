@@ -1,0 +1,57 @@
+WEIGHT INHERITANCE BUYS NOTHING HERE, AND THIS FILE'S OWN READ SAID OTHERWISE.
+================================================================================
+    identity  0.846, 0.829      a fitted linear map, the trivial baseline
+    scratch   0.383, 0.380      the delta rule, randomly initialised
+    inherit   0.384, 0.379      the delta rule, initialised FROM the teacher's q/k/v/o
+
+The READ printed below declares "P1 HOLDS: inherit (0.3785) beats scratch (0.3804)". That is
+a 0.5% difference on per-seed ranges that completely overlap -- scratch spans 0.3804-0.3828,
+inherit spans 0.3785-0.3839. There is no effect. The comparison took minima with no noise
+floor, which is the THIRD variant in this project of the same mistake: a mean over a bimodal
+outcome manufactured a result, a threshold set above an effect size hid one, and now a
+difference smaller than the seed spread has been called a win. The script has been fixed to
+compare against the within-arm range; this header stands as the record.
+
+WHY INHERITANCE FAILS, and it is specific to this architecture. We L2-normalise q and k, as
+the delta-rule family does, which discards the magnitude the teacher's projections encode. And
+the delta rule uses k as an ERASE DIRECTION rather than as a similarity key. So a teacher's
+attention weights do not mean in this student what they meant in the teacher. The conversion
+protocols' students are built to preserve that correspondence. Ours is not.
+
+WHAT SURVIVES. The delta rule accounts for about 62% of the teacher layer's output energy
+against the linear baseline's 17%, so it genuinely represents much of what the attention layer
+computes. But 0.38 residual is well above the ~0.25 at which layerwise distillation is
+reported to recover end-to-end quality after a short finetune.
+
+WHAT THIS MEANS FOR THE PLAN. The cheap route -- inherit projections, match layer outputs,
+350-700M tokens, ~$100 -- does not apply to us, because the half that makes it cheap is the
+inheritance and the inheritance does nothing. Distillation into Saryu would need full
+end-to-end training. That is not impossible and may still beat pretraining, but it is not the
+bargain RADLADS describes and should not be costed as if it were.
+
+AND THE STANDING CAVEAT, unchanged: what receives any of this is the MATRIX MEMORY, our Gated
+DeltaNet equivalent and the component efficiency_hybrid.txt measured as a 2x penalty from
+scratch. The Householder transport is not attention-shaped and receives nothing.
+================================================================================
+
+DISTILL SURROGATE  d=256 heads=8 ctx=256 chunk=32, 1500 steps, 2 seeds
+question: can the delta rule reproduce a softmax attention layer well enough for
+layerwise distillation? Reported as residual relative error -- fraction of the
+teacher's output energy left unexplained. Lower is better.
+
+       arm  best residual relative error per seed
+----------------------------------------------------
+  identity  0.8463, 0.8291
+   scratch  0.3828, 0.3804
+   inherit  0.3839, 0.3785
+
+1146s
+
+READ, against the registered predictions
+  P1 inherit (0.3785) beats scratch (0.3804): HOLDS
+  P2 both beat the identity baseline (0.8291): HOLDS
+  P3 inherit below 0.25: FALSIFIED (0.3785)
+
+  Between the baseline and the threshold: representable but not cleanly, which
+  is the regime where an end-to-end finetune decides it and layerwise numbers do
+  not. That is a bigger commitment than this test was meant to justify.

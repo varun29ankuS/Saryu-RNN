@@ -216,8 +216,12 @@ t0 = time.time()
 data, V = load()
 print('enwik8: {:,} chars, vocab {} ({:.0f}s)'.format(len(data), V, time.time() - t0),
       flush=True)
-split = int(0.95 * len(data))
-tr, va = data[:split], data[split:]
+# STANDARD enwik8 SPLIT: 90M train / 5M valid / 5M test. This was 95/5, which is why the
+# README had to say our bpc is "not comparable with published enwik8 numbers". It is a one-line
+# change that makes every number from here on citable instead of self-referential, and it is
+# unfixable after a run rather than before one.
+_n = len(data)
+tr, va, te = data[:int(0.90 * _n)], data[int(0.90 * _n):int(0.95 * _n)], data[int(0.95 * _n):]
 
 def modern_init(m, nl):
     with torch.no_grad():
@@ -311,6 +315,19 @@ for name, mode, arm_lr, arm_seed in ARMS:
         _start = int(_ck.get('step', 0))
         for _ in range(_start):
             sch.step()          # replay the schedule so LR is correct on resume
+        # THE DATA ORDER. Without this the generator restarts from its seed and the resumed
+        # session re-trains on exactly the batches the first session already saw -- silently,
+        # with a loss curve that looks perfectly healthy. A two-session run would have been one
+        # session of data seen twice.
+        if 'gen' in _ck:
+            g.set_state(_ck['gen'])
+        else:
+            print('  WARNING: checkpoint has no generator state; data order restarts and this'
+                  ' session will repeat batches already seen', flush=True)
+        # Muon's momentum buffers live in opt2 and were never saved, so a resumed muon run
+        # restarted its momentum from zero every session.
+        if opt2 is not None and _ck.get('opt2') is not None:
+            opt2.load_state_dict(_ck['opt2'])
         print('  RESUMED from {} at step {}'.format(_r, _start), flush=True)
     print('{}: d={} {:,} params'.format(name, d, n), flush=True)
     t1, done, skips = time.time(), _start, 0
@@ -351,7 +368,9 @@ for name, mode, arm_lr, arm_seed in ARMS:
         _sv = os.environ.get('SAVE', '')
         if _sv and done % max(1, int(os.environ.get('SAVE_EVERY', 500))) == 0:
             torch.save({'state': m.state_dict(), 'arm': name, 'd': d, 'step': done,
-                        'opt': opt.state_dict()}, _sv + '.tmp')
+                        'opt': opt.state_dict(), 'gen': g.get_state(),
+                        'opt2': (opt2.state_dict() if opt2 is not None else None)},
+                       _sv + '.tmp')
             os.replace(_sv + '.tmp', _sv)
             print('    saved at step {}'.format(done), flush=True)
         if time.time() - t1 > WALLCAP_S:
@@ -374,7 +393,8 @@ for name, mode, arm_lr, arm_seed in ARMS:
     _sv = os.environ.get('SAVE', '/kaggle/working/saryu_25m.pt')
     if _sv:
         torch.save({'state': m.state_dict(), 'arm': name, 'd': d, 'step': done,
-                    'opt': opt.state_dict()}, _sv)
+                    'opt': opt.state_dict(), 'gen': g.get_state(),
+                    'opt2': (opt2.state_dict() if opt2 is not None else None)}, _sv)
     del m, opt
     if DEV == 'cuda':
         torch.cuda.empty_cache()

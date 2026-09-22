@@ -1,0 +1,25 @@
+DELTA CAPACITY  d=256 heads=8 ctx=256, 1500 steps, 2 seeds
+which limitation stops the delta rule matching a softmax attention layer?
+baseline to beat: 0.38 residual (distill_surrogate.txt). A linear map gets 0.83.
+
+           arm    params   vs base  residual per seed
+----------------------------------------------------------
+          base   201,240     1.00x  0.3828, 0.3804
+         wide2   397,848     1.98x  0.3843, 0.3843
+         wide4   791,064     3.93x  0.3785, 0.3734
+        delta2   270,888     1.35x  0.3901, 0.3790
+        delta3   340,536     1.69x  0.3959, 0.3708
+          noL2   201,240     1.00x  0.7321, 0.7616
+  wide2+delta2   533,032     2.65x  0.3871, 0.3722
+
+9815s
+
+READ, against the registered predictions
+  seed spread across arms: 0.0295 -- smaller differences are NOT real
+    wide2          0.3843  (no effect, 1.98x params)
+    wide4          0.3760  (no effect, 3.93x params)
+    delta2         0.3845  (no effect, 1.35x params)
+    delta3         0.3833  (no effect, 1.69x params)
+    noL2           0.7469  (WORSE by 0.3653, 1.00x params)
+    wide2+delta2   0.3796  (no effect, 2.65x params)
+  P1 capacity dominates: best width wide4 0.3760 vs best rank delta3 0.3833 -> not shown

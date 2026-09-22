@@ -202,8 +202,7 @@ class SaryuV3Block(nn.Module):
                  gate_cap=0.90, write_topk=None, state_nl=None, state_topk=None,
                  orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False,
                  memory=False, mem_dk=None, mem_neg_eig=False, mem_chunk=None,
-                 mem_decay=False, mem_decouple=False, mem_decay_channel=False,
-                 mem_ogate=True, mem_alog=False):
+                 mem_decay=False, mem_decouple=False, mem_decay_channel=False):
         """timescales / write_scale are OFF by default: the defaults are the trained configuration,
         so the released checkpoints load and reproduce exactly. They address the measured limit that
         the trained models stop using context at about 512 characters
@@ -327,52 +326,14 @@ class SaryuV3Block(nn.Module):
             # diagonal; a head-wise gate is the coarsest rung.
             mout = self.H * (self.mem_dk if mem_decay_channel else 1)
             self.ma_proj = nn.Linear(d, mout) if mem_decay else None
-            # A_log PARAMETERISATION of the same gate, after Qwen3-Next and Kimi Linear:
-            #     alpha = exp(g),  g = -exp(A_log) * softplus(ma_proj(z) + dt_bias)
-            # with A_log randomised PER HEAD, so the heads start at DIFFERENT timescales. The
-            # sigmoid form above starts every head at the same alpha ~ 0.982; this project tried
-            # three times to install a timescale ladder by hand and training collapsed it every
-            # time (results/gate_timescales.txt). Qwen and Kimi do not install one; they
-            # initialise one, and pair it with the output gate below. Measured on the surrogate
-            # (results/delta_gate_decay.txt): this alone 0.3822 vs base 0.3816 -- nothing; with
-            # the output gate 0.2280 -- the two are halves of one control system.
-            # Kimi's init: A_log = log(U(1,16)) per head, dt_bias = inverse-softplus of a
-            # log-uniform U(1e-3, 1e-1). (Qwen's differs: log(U(0.01,16)) and dt_bias = 1.)
-            # dt_bias takes ma_proj's output shape so the channel-wise decay keeps its own bias
-            # per key channel; the surrogate measured only the head-wise form.
-            self.mem_alog = mem_alog
-            if mem_decay and mem_alog:
-                self.A_log = nn.Parameter(torch.log(torch.empty(self.H).uniform_(1.0, 16.0)))
-                dt = torch.empty(mout).uniform_(math.log(1e-3), math.log(1e-1)).exp()
-                self.dt_bias = nn.Parameter(dt + torch.log(-torch.expm1(-dt)))
-            else:
-                self.A_log = self.dt_bias = None
             if mem_decay:
                 nn.init.zeros_(self.ma_proj.weight)
-                # THE SAME CONSTANT MEANS OPPOSITE THINGS in the two parameterisations. Under the
-                # sigmoid, +4.0 is alpha ~ 0.982, barely forgetting. Under softplus it would be
-                # softplus(4 + dt_bias) ~ 0.2-1.7 in place of 1e-3-1e-1, g down to -27, alpha
-                # ~ 0.05: the memory would be dead at init. So the bias is chosen HERE, at the
-                # one place it is set; anything written to it above this line is overwritten.
-                nn.init.constant_(self.ma_proj.bias, 0.0 if mem_alog else 4.0)
+                nn.init.constant_(self.ma_proj.bias, 4.0)
             # DECOUPLED ERASE AND WRITE, after Gated DeltaNet-2 (arXiv 2605.22791 -- already in
             # refs.bib and never used). A single beta controls both how much of the old value is
             # erased and how much of the new one is written; there is no reason those are tied.
             self.mbw_proj = nn.Linear(d, self.H) if mem_decouple else None
             self.mnorm = RMSNorm(self.mem_dk)
-            # OUTPUT GATE, after Qwen3NextRMSNormGated and KimiLinearRMSNormGated. Both shipped
-            # implementations of this family gate the delta-rule output before the output
-            # projection; ours did not, which is the same class of omission as the cell_shootout
-            # retraction (it lacked the per-head RMSNorm before the output projection -- we added
-            # that half and not this one).
-            #
-            # ORDER IS NORM -> WEIGHT -> GATE, and it is not a detail. Qwen's source carries the
-            # comment "Norm before gate". Measured on the attention-mimicry surrogate
-            # (results/delta_gate_decay.txt): gate-then-norm scores 1.035, WORSE than a fitted
-            # linear map's 0.83 and therefore worse than not having the layer; norm-then-gate
-            # scores 0.334 against a baseline of 0.382. Same parameters, same component.
-            self.mz_proj = nn.Linear(d, inner, bias=False) if mem_ogate else None
-            self.mem_ogate = mem_ogate
             self.m_out = nn.Linear(inner, d, bias=False)
             nn.init.zeros_(self.m_out.weight)     # no-op at init, as r_out is below
             self.mem_neg_eig = mem_neg_eig
@@ -678,18 +639,7 @@ class SaryuV3Block(nn.Module):
             # Flooring at exp(-1) bounds the spread at exp(C) and costs nothing anyone wants:
             # alpha = 0.368 already multiplies the state by 1/e every single token.
             # The floor must live HERE, not in the kernel, or the two paths stop agreeing.
-            if self.mem_alog:
-                # g in at least float32 whatever the compute dtype (both shipped models upcast
-                # here; a half-precision softplus of a tiny dt_bias loses the timescale), then
-                # the SAME floor as the sigmoid form: a clamp on log-alpha at log(ALPHA_FLOOR).
-                # The surrogate that measured this clamped at -3; the floor is separate work.
-                ft = torch.promote_types(z.dtype, torch.float32)
-                a = self.ma_proj(z).to(ft).view(B, L, H, -1) + self.dt_bias.to(ft).view(H, -1)
-                g = -self.A_log.to(ft).exp()[:, None] * F.softplus(a)
-                alpha = torch.exp(g.clamp(min=math.log(ALPHA_FLOOR))).to(z.dtype)
-                alpha = alpha.reshape(B, L, -1)
-            else:
-                alpha = ALPHA_FLOOR + (1.0 - ALPHA_FLOOR) * torch.sigmoid(self.ma_proj(z))
+            alpha = ALPHA_FLOOR + (1.0 - ALPHA_FLOOR) * torch.sigmoid(self.ma_proj(z))
             alpha = (alpha.view(B, L, H, dk) if self.mem_decay_channel
                      else alpha[..., None].expand(B, L, H, dk))
         else:
@@ -709,10 +659,7 @@ class SaryuV3Block(nn.Module):
                 S = S + torch.einsum('bhv,bhk->bhvk', bw * vt - be * Sk, kt)
                 outs.append(torch.einsum('bhvk,bhk->bhv', S, qt))
             o = torch.stack(outs, 1)
-        o = self.mnorm(o)                                   # normalise, then the learned weight
-        if self.mz_proj is not None:
-            o = o * F.silu(self.mz_proj(z).view(B, L, H, dk))    # ... and only then the gate
-        return o.reshape(B, L, H * dk)
+        return self.mnorm(o).reshape(B, L, H * dk)
 
     def level2(self, z):
         """The second iterated integral, per head: A_t = alpha A_{t-1} + p_t k_t^T, read A_t q_t.
@@ -880,7 +827,6 @@ class SaryuV3LM(nn.Module):
                  orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False,
                  memory=False, mem_dk=None, mem_neg_eig=False, mem_chunk=None,
                  mem_decay=False, mem_decouple=False, mem_decay_channel=False,
-                 mem_ogate=True, mem_alog=False,
                  gate_lb=False, attn_every=None, attn_heads=4, attn_kv_heads=None,
                  attn_rope_frac=0.5, attn_gate=True, attn_qk_norm=True):
         """nh (reflections per head) and H default to the trained configuration, so the released
@@ -911,8 +857,7 @@ class SaryuV3LM(nn.Module):
                       memory=memory, mem_dk=mem_dk,
                       mem_neg_eig=mem_neg_eig, mem_chunk=mem_chunk,
                       mem_decay=mem_decay, mem_decouple=mem_decouple,
-                      mem_decay_channel=mem_decay_channel, mem_ogate=mem_ogate,
-                      mem_alog=mem_alog,
+                      mem_decay_channel=mem_decay_channel,
                       timescales=timescales, write_scale=write_scale,
                       gate_w_scale=gate_w_scale, chunk=chunk,
                       freeze_gate_bias=freeze_gate_bias,
