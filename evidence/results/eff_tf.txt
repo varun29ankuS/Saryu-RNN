@@ -1,0 +1,65 @@
+EFFICIENCY  enwik8: 99,621,832 chars, vocab 481 (5s to encode)
+target 5,000,000 params, ctx 128, batch 16, 4 layers, 1500 steps = 3,072,000 tokens
+
+arm                d       params  parameter match
+----------------------------------------------------
+transformer      312    5,029,921   1.01x target
+
+    transformer       2,048 tok  bpc 7.297  (0m)
+    transformer     204,800 tok  bpc 4.062  (1m)
+    transformer     409,600 tok  bpc 3.903  (2m)
+    transformer     614,400 tok  bpc 3.842  (3m)
+    transformer     819,200 tok  bpc 3.786  (3m)
+    transformer   1,024,000 tok  bpc 3.711  (4m)
+    transformer   1,228,800 tok  bpc 3.569  (5m)
+    transformer   1,433,600 tok  bpc 3.444  (6m)
+    transformer   1,638,400 tok  bpc 3.263  (6m)
+    transformer   1,843,200 tok  bpc 3.156  (7m)
+    transformer   2,048,000 tok  bpc 3.038  (8m)
+    transformer   2,252,800 tok  bpc 2.964  (9m)
+    transformer   2,457,600 tok  bpc 2.895  (9m)
+    transformer   2,662,400 tok  bpc 2.821  (10m)
+    transformer   2,867,200 tok  bpc 2.789  (11m)
+    transformer   3,072,000 tok  bpc 2.751  (12m)
+    transformer       2,048 tok  bpc 7.212  (0m)
+    transformer     204,800 tok  bpc 4.021  (1m)
+    transformer     409,600 tok  bpc 3.853  (1m)
+    transformer     614,400 tok  bpc 3.738  (2m)
+    transformer     819,200 tok  bpc 3.510  (3m)
+    transformer   1,024,000 tok  bpc 3.292  (4m)
+    transformer   1,228,800 tok  bpc 3.204  (4m)
+    transformer   1,433,600 tok  bpc 3.082  (5m)
+    transformer   1,638,400 tok  bpc 2.970  (6m)
+    transformer   1,843,200 tok  bpc 2.900  (6m)
+    transformer   2,048,000 tok  bpc 2.829  (7m)
+    transformer   2,252,800 tok  bpc 2.772  (7m)
+    transformer   2,457,600 tok  bpc 2.725  (8m)
+    transformer   2,662,400 tok  bpc 2.666  (9m)
+    transformer   2,867,200 tok  bpc 2.630  (10m)
+    transformer   3,072,000 tok  bpc 2.571  (10m)
+
+1325s total
+
+TOKENS TO REACH EACH bpc THRESHOLD  (lower is better)
+arm                params         <=3.0         <=2.5         <=2.2         <=2.0    best
+----------------------------------------------------------------------------------------
+transformer     5,029,921     2,252,800            --            --            --   2.751
+transformer     5,029,921     1,638,400            --            --            --   2.571
+  "--" means the arm never reached that bpc within the budget. It is NOT a score.
+
+HOURS TO REACH EACH bpc THRESHOLD  (lower is better)
+arm                params         <=3.0         <=2.5         <=2.2         <=2.0    best
+----------------------------------------------------------------------------------------
+transformer     5,029,921          0.14            --            --            --   2.751
+transformer     5,029,921          0.09            --            --            --   2.571
+  "--" means the arm never reached that bpc within the budget. It is NOT a score.
+
+  The two tables are the two halves of the goal. Saryu winning the first and losing
+  the second means it learns from less data but does not make intelligence cheaper,
+  which is a materially different result from winning outright -- say so if it happens.
+
+READ, against the registered predictions
+  bpc <= 3.0: reached by 1 arm(s) -- VOID, says nothing.
+  bpc <= 2.5: reached by 0 arm(s) -- VOID, says nothing.
+  bpc <= 2.2: reached by 0 arm(s) -- VOID, says nothing.
+  bpc <= 2.0: reached by 0 arm(s) -- VOID, says nothing.

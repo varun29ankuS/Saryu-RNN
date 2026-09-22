@@ -41,6 +41,28 @@ CHUNK = 8           # chunk length of the parallel kernel
 
 
 # ------------------------------------------------------------ chunkwise kernel (proven)
+_TRI_CACHE = {}
+
+
+def _tri(kind, n, device, dtype):
+    """Cached constant triangular masks.
+
+    These depend only on the chunk size, and rebuilding them per chunk per layer per step showed
+    up as 144 aten::tril calls at 334us each in a CPU profile of one 5M model. They are constants:
+    never mutated, never require grad, so one tensor per (kind, n, device, dtype) is safe. Returned
+    tensors must be treated as read-only -- everything here consumes them in a multiply."""
+    key = (kind, n, str(device), dtype)
+    t = _TRI_CACHE.get(key)
+    if t is None:
+        if kind == 'eye':
+            t = torch.eye(n, device=device, dtype=dtype)
+        else:
+            t = torch.tril(torch.ones(n, n, device=device, dtype=dtype),
+                           -1 if kind == 'strict' else 0)
+        _TRI_CACHE[key] = t
+    return t
+
+
 def chunkwise(h0, u, beta, a, b, C=CHUNK):
     """h_t = a_t T_t h_{t-1} + b_t, chunk-parallel. Inverse-free influence form; exact for
     all beta (chunkwise.py: max err ~4e-7 over 15 configs)."""
@@ -77,6 +99,9 @@ def chunkwise(h0, u, beta, a, b, C=CHUNK):
         # exponential is then bounded by exp(range/2), which C=8 and a >= 0.1 keep < 1e5.
         la = torch.cumsum(torch.log(ac.clamp_min(1e-6)), dim=1)          # [B,C]
         ref = la.mean(dim=1, keepdim=True)
+        # Two exps, not exp-then-reciprocal. The reciprocal form was tried and measured: it saves
+        # an exp in forward and costs more in backward, where d(1/x) = -grad/x^2 is two muls
+        # against exp's one. Net +64 mul per two steps. Kept as written.
         sc_in = torch.exp(-(la - ref))                                   # 1/alpha_j, centered
         sc_out = torch.exp(la - ref)                                     # alpha_t, centered
         sc0 = torch.exp(ref)                                             # e_0 carries alpha_0=1
@@ -85,6 +110,10 @@ def chunkwise(h0, u, beta, a, b, C=CHUNK):
         Ue = torch.einsum('brd,bjd->brj', uc, E)
         rhs = (Ue * amask).sum(-1)
         G = torch.einsum('brd,bsd->brs', uc, uc)
+        # torch.tril, NOT a cached mask-multiply. Swapping it for one was tried and measured: it
+        # removed 80 tril calls and added 128 mul calls per two steps, a net ~0.3% -- inside the
+        # noise, and more ops. Caching a CONSTRUCTED constant is a win; replacing one fused kernel
+        # with a multiply is not.
         Lmat = eye.expand(B, R, R) + torch.tril(G * bc_[:, None, :], diagonal=-1)
         y = torch.linalg.solve_triangular(Lmat, rhs[:, :, None], upper=False)[:, :, 0]
         Ecum = torch.cumsum(E, dim=1)[:, 1:]
@@ -535,9 +564,9 @@ class SaryuV3Block(nn.Module):
         # is reapplied there explicitly.
         la = torch.cumsum(torch.log(alpha.view(B, N, chunk, H, dk).permute(0, 3, 1, 2, 4)
                                     .clamp_min(1e-6)), dim=-2)                 # [B,H,N,C,dk]
-        eye = torch.eye(chunk, device=k.device, dtype=k.dtype)
-        strict = torch.tril(torch.ones(chunk, chunk, device=k.device, dtype=k.dtype), -1)
-        incl = torch.tril(torch.ones(chunk, chunk, device=k.device, dtype=k.dtype), 0)
+        eye = _tri('eye', chunk, k.device, k.dtype)
+        strict = _tri('strict', chunk, k.device, k.dtype)
+        incl = _tri('incl', chunk, k.device, k.dtype)
         S = torch.zeros(B, H, dk, dk, device=k.device, dtype=k.dtype)
         outs = []
         for n in range(N):
@@ -668,6 +697,119 @@ class SwiGLU(nn.Module):
         return self.w2(F.silu(self.w1(z)) * self.w3(z))
 
 
+_ROPE_CACHE = {}
+
+
+def _rope(t, cos, sin, rd=None):
+    """Rotate the FIRST rd channels by the position angle; leave the rest untouched.
+
+    Partial RoPE, as Qwen3-Next and Kimi Linear both use. rd=None rotates everything. Rotating
+    only part of the head is better motivated here than in a pure transformer: the recurrent
+    layers below already carry order, so the attention block does not need every channel spent
+    on position, and the unrotated channels stay free to carry content verbatim."""
+    if rd is None or rd >= t.shape[-1]:
+        t1, t2 = t.chunk(2, dim=-1)
+        return torch.cat([t1 * cos - t2 * sin, t1 * sin + t2 * cos], dim=-1)
+    if rd == 0:
+        return t
+    rot, keep = t[..., :rd], t[..., rd:]
+    r1, r2 = rot.chunk(2, dim=-1)
+    return torch.cat([r1 * cos - r2 * sin, r1 * sin + r2 * cos, keep], dim=-1)
+
+
+class ZeroCenteredRMSNorm(nn.Module):
+    """RMSNorm whose gain is centred on ZERO, so the module is the identity at init.
+
+    Qwen3-Next uses this variant for QK-Norm. The difference from ordinary RMSNorm is only where
+    the parameter sits: scaling by (1 + w) with w init 0 starts as identity, and weight decay then
+    pulls w toward 0 -- i.e. toward the identity -- where a standard gain init at 1 is pulled
+    toward 0, which would erase the signal."""
+
+    def __init__(self, d, eps=1e-6):
+        super().__init__()
+        self.w = nn.Parameter(torch.zeros(d))
+        self.eps = eps
+
+    def forward(self, x):
+        x = x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        return x * (1.0 + self.w)
+
+
+class AttnBlock(nn.Module):
+    """Full causal attention with RoPE, for the hybrid stack.
+
+    WHY THIS EXISTS. Every shipped model in this family is a hybrid, and none is a pure
+    recurrence: Qwen3-Next runs 36 Gated DeltaNet layers to 12 attention layers and Kimi Linear
+    uses the same 3:1 ratio. The reason is the one our own double dissociation measured -- a
+    fixed-size state carries evolving state but cannot do unbounded retrieval of specific facts,
+    and 25% attention is what buys that back. The recurrence stays the cheap substrate; this is
+    the part that can look anything up.
+
+    ROPE, NOT LEARNED ABSOLUTE POSITIONS. The learned-embedding route put 39.5% of a 5M parameter
+    budget into positions the model never saw, which was found as a confound in our own efficiency
+    harness on 2026-09-22. RoPE is parameter-free and extrapolates, so it cannot repeat that."""
+
+    def __init__(self, d, n_heads=4, n_kv_heads=None, rope_base=10000.0, rope_frac=0.5,
+                 gate=True, qk_norm=True):
+        super().__init__()
+        if d % n_heads:
+            raise ValueError(f'attention width {d} is not divisible by {n_heads} heads')
+        self.nh, self.hd = n_heads, d // n_heads
+        if self.hd % 2:
+            raise ValueError(f'RoPE needs an even head dim, got {self.hd}')
+        # GQA: fewer KV heads than query heads, which divides the KV cache by nh/nkv. This is the
+        # one parity item with a real effect on the property the hybrid gives up -- a hybrid is
+        # not constant-memory, so how fast its cache grows is the whole argument.
+        self.nkv = n_kv_heads if n_kv_heads is not None else max(1, n_heads // 2)
+        if n_heads % self.nkv:
+            raise ValueError(f'{n_heads} query heads is not a multiple of {self.nkv} kv heads')
+        self.ln = nn.LayerNorm(d)
+        self.q_proj = nn.Linear(d, n_heads * self.hd, bias=False)
+        self.kv_proj = nn.Linear(d, 2 * self.nkv * self.hd, bias=False)
+        # Output gate, as in Qwen3-Next's Gated Attention: the attention result is scaled by
+        # sigmoid(gate) before the output projection, so a head can be switched off per token.
+        self.g_proj = nn.Linear(d, n_heads * self.hd, bias=False) if gate else None
+        self.o = nn.Linear(n_heads * self.hd, d, bias=False)
+        self.qn = ZeroCenteredRMSNorm(self.hd) if qk_norm else None
+        self.kn = ZeroCenteredRMSNorm(self.hd) if qk_norm else None
+        self.rope_base = rope_base
+        self.rd = 2 * int(self.hd * rope_frac / 2)          # even, and <= hd
+
+    def _cos_sin(self, T, device, dtype):
+        rd = self.rd or self.hd
+        key = (T, rd, self.rope_base, str(device), dtype)
+        cs = _ROPE_CACHE.get(key)
+        if cs is None:
+            inv = 1.0 / (self.rope_base ** (torch.arange(0, rd, 2, device=device,
+                                                         dtype=torch.float32) / rd))
+            f = torch.outer(torch.arange(T, device=device, dtype=torch.float32), inv)
+            cs = (f.cos().to(dtype), f.sin().to(dtype))
+            _ROPE_CACHE[key] = cs
+        return cs
+
+    def forward(self, x):
+        B, T, D = x.shape
+        h = self.ln(x)
+        q = self.q_proj(h).view(B, T, self.nh, self.hd).transpose(1, 2)
+        k, v = self.kv_proj(h).view(B, T, 2, self.nkv, self.hd).permute(2, 0, 3, 1, 4)
+        if self.qn is not None:
+            q, k = self.qn(q), self.kn(k)
+        cos, sin = self._cos_sin(T, x.device, x.dtype)
+        q, k = _rope(q, cos, sin, self.rd), _rope(k, cos, sin, self.rd)
+        if self.nkv != self.nh:                      # GQA: share each kv head across a group
+            rep = self.nh // self.nkv
+            k, v = k.repeat_interleave(rep, dim=1), v.repeat_interleave(rep, dim=1)
+        o = F.scaled_dot_product_attention(q, k, v, is_causal=True)
+        o = o.transpose(1, 2).reshape(B, T, self.nh * self.hd)
+        if self.g_proj is not None:
+            o = o * torch.sigmoid(self.g_proj(h))
+        return self.o(o)
+
+    def kv_floats(self, L):
+        """KV cache for this block at context L. Uses nkv, not nh -- that is what GQA buys."""
+        return 2 * L * self.nkv * self.hd
+
+
 class SaryuV3LM(nn.Module):
     kind = 'saryu-v3'
 
@@ -678,7 +820,8 @@ class SaryuV3LM(nn.Module):
                  orth_axes=False, beta_init=math.pi, bind_n=1, bind_sign=False,
                  memory=False, mem_dk=None, mem_neg_eig=False, mem_chunk=None,
                  mem_decay=False, mem_decouple=False, mem_decay_channel=False,
-                 gate_lb=False):
+                 gate_lb=False, attn_every=None, attn_heads=4, attn_kv_heads=None,
+                 attn_rope_frac=0.5, attn_gate=True, attn_qk_norm=True):
         """nh (reflections per head) and H default to the trained configuration, so the released
         checkpoints load unchanged. They are exposed because nh is the knob the trace law is about
         (evidence/results/trace_law.txt): overlap ~ exp(-2 nh / dh), so nh trades state tracking
@@ -690,32 +833,43 @@ class SaryuV3LM(nn.Module):
         self.vemb = nn.Embedding(vocab, d) if use_vemb else None
         if self.vemb is not None:
             nn.init.normal_(self.vemb.weight, std=0.02)
-        self.mix = nn.ModuleList([SaryuV3Block(d, nh=nh, H=H, carve=carve, bind_write=bind_write,
-                                               gate_cap=gate_cap, write_topk=write_topk,
-                                               state_nl=state_nl, state_topk=state_topk,
-                                               orth_axes=orth_axes,
-                                               beta_init=beta_init,
-                                               bind_n=bind_n,
-                                               bind_sign=bind_sign,
-                                               sig2=sig2, sig2_anti=sig2_anti,
-                                               memory=memory, mem_dk=mem_dk,
-                                               mem_neg_eig=mem_neg_eig,
-                                               mem_chunk=mem_chunk,
-                                               mem_decay=mem_decay,
-                                               mem_decouple=mem_decouple,
-                                               mem_decay_channel=mem_decay_channel,
-                                               timescales=timescales, write_scale=write_scale,
-                                               gate_w_scale=gate_w_scale, chunk=chunk,
-                                               freeze_gate_bias=freeze_gate_bias,
-                                               gate_ceiling=gate_ceiling)
-                                  for _ in range(nl)])
+        # attn_every=k replaces every k-th block with attention: k=4 is the 3:1 ratio that
+        # Qwen3-Next and Kimi Linear independently landed on. None leaves the stack pure, and
+        # must stay bit-identical to the pre-hybrid model -- a test asserts exactly that.
+        self.attn_every = attn_every
+        self.is_attn = [attn_every is not None and (i + 1) % attn_every == 0 for i in range(nl)]
+        self.n_rec = sum(not a for a in self.is_attn)
+        if attn_every is not None and self.n_rec == 0:
+            raise ValueError('attn_every leaves no recurrent layers')
+        rec_kw = dict(nh=nh, H=H, carve=carve, bind_write=bind_write,
+                      gate_cap=gate_cap, write_topk=write_topk,
+                      state_nl=state_nl, state_topk=state_topk,
+                      orth_axes=orth_axes, beta_init=beta_init,
+                      bind_n=bind_n, bind_sign=bind_sign,
+                      sig2=sig2, sig2_anti=sig2_anti,
+                      memory=memory, mem_dk=mem_dk,
+                      mem_neg_eig=mem_neg_eig, mem_chunk=mem_chunk,
+                      mem_decay=mem_decay, mem_decouple=mem_decouple,
+                      mem_decay_channel=mem_decay_channel,
+                      timescales=timescales, write_scale=write_scale,
+                      gate_w_scale=gate_w_scale, chunk=chunk,
+                      freeze_gate_bias=freeze_gate_bias,
+                      gate_ceiling=gate_ceiling)
+        attn_kw = dict(n_heads=attn_heads, n_kv_heads=attn_kv_heads, rope_frac=attn_rope_frac,
+                       gate=attn_gate, qk_norm=attn_qk_norm)
+        self.mix = nn.ModuleList([AttnBlock(d, **attn_kw) if a
+                                  else SaryuV3Block(d, **rec_kw) for a in self.is_attn])
         self.ffn = nn.ModuleList([SwiGLU(d) for _ in range(nl)])
         # Gamma lives on the LM, not on the block, because monotonicity in depth is a property OF
         # THE STACK: cumax has to run across layers, and a block cannot see its neighbours. Zeros
         # at init give softmax = 1/nl per layer, so the bounds come out evenly spaced -- for nl = 4,
         # [0, 0.25, 0.50, 0.75], i.e. layer 3's forget gate can never fall below 0.75 and its
         # retention can never fall below 4 tokens. Training moves the spacing, never the order.
-        self.gamma = nn.Parameter(torch.zeros(nl, H)) if gate_lb else None
+        # Sized by RECURRENT layer count, not nl, and indexed by recurrent position. In a hybrid
+        # stack the attention blocks have no gate, so a gamma of length nl would either hand a
+        # bound to a block that cannot use it or skip a rung of the ladder -- silently, since
+        # both still run. n_rec == nl whenever attn_every is None, so the pure model is unchanged.
+        self.gamma = nn.Parameter(torch.zeros(self.n_rec, H)) if gate_lb else None
         self.lnf = nn.LayerNorm(d)
         self.head = nn.Linear(d, vocab)
         self.d, self.nl = d, nl
@@ -738,13 +892,26 @@ class SaryuV3LM(nn.Module):
         x = self.emb(idx)
         ve = self.vemb(idx) if self.vemb is not None else None
         lb = self.gate_bounds() if self.gamma is not None else None
-        for i, (m, f) in enumerate(zip(self.mix, self.ffn)):
-            x = x + m(x, ve, None if lb is None else lb[i])
+        ri = 0
+        for a, m, f in zip(self.is_attn, self.mix, self.ffn):
+            if a:
+                x = x + m(x)                       # attention block: no ve, no gate bound
+            else:
+                x = x + m(x, ve, None if lb is None else lb[ri])
+                ri += 1                            # the ladder advances only over recurrent layers
             x = x + f(x)
         return self.head(self.lnf(x))
 
     def state_floats(self, L=None):
-        return self.d * self.nl
+        """Inference state per sequence. A hybrid is NOT constant-memory and must not be reported
+        as though it were: its attention layers keep a KV cache that grows with context, so the
+        honest number is n_rec*d + n_attn*2*L*d. The 3:1 ratio buys back retrieval by giving up
+        exactly the property the pure recurrence was claimed on, and L is required to say so."""
+        n_attn = sum(self.is_attn)
+        if n_attn and L is None:
+            raise ValueError('a hybrid stack has a context-dependent state; pass L')
+        kv = sum(b.kv_floats(L) for a, b in zip(self.is_attn, self.mix) if a)
+        return self.d * self.n_rec + kv
 
 
 def load_checkpoint(path, map_location='cpu'):

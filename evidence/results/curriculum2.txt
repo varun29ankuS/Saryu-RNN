@@ -1,3 +1,32 @@
+CORRECTED 2026-09-22. THE READ BELOW IS WRONG. THE CURRICULUM WORKS.
+================================================================================
+This file concluded "nothing has ever moved". Re-checked against runs/ rather than
+against this file's own summary line:
+
+    uniform   8 seeds spanning 0.297-0.336 -- ALL of them, a range of 0.039, at chance
+    slow      0.766, 0.719, 0.641, then 0.289-0.312          3/8 above 0.5
+    gated     0.727, 0.719, 0.719, 0.680, 0.523, 0.367, ...  5/8 above 0.5, median 0.602
+
+NINE OF SIXTEEN curriculum seeds beat the BEST of eight uniform seeds. Uniform never
+once exceeds 0.336. That is not seed noise; it is a large effect.
+
+WHY IT WAS RECORDED AS NULL, and it is a mistake worth more than the result. The arms
+were scored by a binary solve rate at > 0.8, and the effect tops out near 0.77 -- so the
+threshold sat just past where the signal lives, and three arms all reported 0/8. A
+statistic chosen before the data was seen erased the thing the experiment was run to
+find.
+
+Every other correction in CLAIMS.md is an over-claim being walked back. This one is the
+reverse: a working intervention filed as a failure and left that way. Summary statistics
+have now destroyed a result in both directions in this project -- a mean over a bimodal
+outcome manufactured one (both_fixes), and a threshold above the effect size hid this one.
+
+WHAT IS AND IS NOT ESTABLISHED. The curriculum moves 4-pair MQAR from pinned-at-chance to
+most of the way solved on half the seeds. It does NOT solve the task, and the gap between
+0.77 and 1.000 is not addressed by anything here. `gated` looks better than `slow` (5/8
+against 3/8 above 0.5, and a median of 0.602 against 0.309), which was also not read off.
+================================================================================
+
 CURRICULUM 2  target 4 pairs, gap 4, muon lr 0.0003, 6000 steps, 8 seeds
 architecture identical in every arm; only the order of the data changes
 R_M is the within-class manifold radius at the query position: ~0.3 where the model

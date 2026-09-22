@@ -1,0 +1,65 @@
+EFFICIENCY  enwik8: 99,621,832 chars, vocab 481 (4s to encode)
+target 5,000,000 params, ctx 128, batch 16, 4 layers, 1500 steps = 3,072,000 tokens
+
+arm                d       params  parameter match
+----------------------------------------------------
+gru              440    5,085,121   1.02x target
+
+    gru               2,048 tok  bpc 6.838  (0m)
+    gru             204,800 tok  bpc 3.027  (2m)
+    gru             409,600 tok  bpc 2.742  (4m)
+    gru             614,400 tok  bpc 2.607  (6m)
+    gru             819,200 tok  bpc 2.505  (7m)
+    gru           1,024,000 tok  bpc 2.440  (9m)
+    gru           1,228,800 tok  bpc 2.382  (11m)
+    gru           1,433,600 tok  bpc 2.358  (12m)
+    gru           1,638,400 tok  bpc 2.317  (14m)
+    gru           1,843,200 tok  bpc 2.295  (16m)
+    gru           2,048,000 tok  bpc 2.257  (18m)
+    gru           2,252,800 tok  bpc 2.251  (19m)
+    gru           2,457,600 tok  bpc 2.236  (21m)
+    gru           2,662,400 tok  bpc 2.205  (22m)
+    gru           2,867,200 tok  bpc 2.203  (24m)
+    gru           3,072,000 tok  bpc 2.190  (26m)
+    gru               2,048 tok  bpc 6.930  (0m)
+    gru             204,800 tok  bpc 3.005  (2m)
+    gru             409,600 tok  bpc 2.725  (3m)
+    gru             614,400 tok  bpc 2.590  (5m)
+    gru             819,200 tok  bpc 2.503  (7m)
+    gru           1,024,000 tok  bpc 2.440  (8m)
+    gru           1,228,800 tok  bpc 2.391  (10m)
+    gru           1,433,600 tok  bpc 2.367  (11m)
+    gru           1,638,400 tok  bpc 2.318  (13m)
+    gru           1,843,200 tok  bpc 2.284  (15m)
+    gru           2,048,000 tok  bpc 2.266  (16m)
+    gru           2,252,800 tok  bpc 2.260  (18m)
+    gru           2,457,600 tok  bpc 2.232  (20m)
+    gru           2,662,400 tok  bpc 2.219  (21m)
+    gru           2,867,200 tok  bpc 2.210  (23m)
+    gru           3,072,000 tok  bpc 2.193  (25m)
+
+3062s total
+
+TOKENS TO REACH EACH bpc THRESHOLD  (lower is better)
+arm                params         <=3.0         <=2.5         <=2.2         <=2.0    best
+----------------------------------------------------------------------------------------
+gru             5,085,121       409,600     1,024,000     3,072,000            --   2.190
+gru             5,085,121       409,600     1,024,000     3,072,000            --   2.193
+  "--" means the arm never reached that bpc within the budget. It is NOT a score.
+
+HOURS TO REACH EACH bpc THRESHOLD  (lower is better)
+arm                params         <=3.0         <=2.5         <=2.2         <=2.0    best
+----------------------------------------------------------------------------------------
+gru             5,085,121          0.06          0.15          0.43            --   2.190
+gru             5,085,121          0.05          0.14          0.42            --   2.193
+  "--" means the arm never reached that bpc within the budget. It is NOT a score.
+
+  The two tables are the two halves of the goal. Saryu winning the first and losing
+  the second means it learns from less data but does not make intelligence cheaper,
+  which is a materially different result from winning outright -- say so if it happens.
+
+READ, against the registered predictions
+  bpc <= 3.0: reached by 1 arm(s) -- VOID, says nothing.
+  bpc <= 2.5: reached by 1 arm(s) -- VOID, says nothing.
+  bpc <= 2.2: reached by 1 arm(s) -- VOID, says nothing.
+  bpc <= 2.0: reached by 0 arm(s) -- VOID, says nothing.
